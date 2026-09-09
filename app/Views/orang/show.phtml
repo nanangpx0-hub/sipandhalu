@@ -1,0 +1,20 @@
+<?php
+$title = 'Detail Petugas';
+require __DIR__ . '/../layouts/header.phtml';
+?>
+<h1><?= \App\Core\View::e($row['nama']) ?></h1>
+<p><?= ((int) $row['is_aktif'] === 1 ? 'Aktif' : 'Nonaktif') ?> · <?= \App\Core\View::e($row['no_hp'] ?? '-') ?> · <?= \App\Core\View::e($row['email'] ?? '-') ?></p>
+<p class="muted"><?= \App\Core\View::e($row['alamat'] ?? '') ?></p>
+<p><a class="btn" href="/petugas/<?= (int) $row['id'] ?>/edit">Ubah</a>
+<form method="post" action="/petugas/<?= (int) $row['id'] ?>/toggle" style="display:inline"><?= $csrf ?><button><?= ((int) $row['is_aktif'] === 1 ? 'Nonaktifkan' : 'Aktifkan') ?></button></form></p>
+<h2>Alias nama <small>(varian Excel: Rozy/Rozi, Ike Noor/…)</small></h2>
+<ul>
+<?php foreach ($aliases as $a): ?>
+<li><?= \App\Core\View::e($a['alias_normalized']) ?>
+<form method="post" action="/petugas/<?= (int) $row['id'] ?>/alias/hapus" style="display:inline"><?= $csrf ?><input type="hidden" name="alias_id" value="<?= (int) $a['id'] ?>"><button class="link">hapus</button></form></li>
+<?php endforeach; ?>
+<?php if ($aliases === []): ?><li class="muted">Belum ada alias.</li><?php endif; ?>
+</ul>
+<form method="post" action="/petugas/<?= (int) $row['id'] ?>/alias" class="toolbar"><?= $csrf ?><input name="alias" placeholder="tambah alias, misal junaidi ari siswanto"><button>Tambah alias</button></form>
+<p class="muted">Riwayat penugasan per periode (PCL/PML/Pengolah) muncul di sini pada tahap 2.</p>
+<?php require __DIR__ . '/../layouts/footer.phtml'; ?>

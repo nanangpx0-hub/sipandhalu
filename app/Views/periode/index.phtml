@@ -1,0 +1,15 @@
+<?php
+$title = 'Periode';
+require __DIR__ . '/../layouts/header.phtml';
+?>
+<h1>Periode <small>(Seruti Q1–Q4, Susenas S1–S2 — satu frame SLS)</small></h1>
+<p><a class="btn" href="/periode/baru">+ Buat periode</a></p>
+<table>
+<tr><th>Label</th><th>Jenis</th><th>Status</th><th></th></tr>
+<?php foreach ($rows as $r): ?>
+<tr><td><a href="/periode/<?= (int) $r['id'] ?>"><?= \App\Core\View::e($r['label']) ?></a></td>
+<td><?= \App\Core\View::e($r['jenis']) ?></td><td><?= \App\Core\View::e($r['status']) ?></td>
+<td><a href="/periode/<?= (int) $r['id'] ?>">Buka →</a></td></tr>
+<?php endforeach; ?>
+</table>
+<?php require __DIR__ . '/../layouts/footer.phtml'; ?>

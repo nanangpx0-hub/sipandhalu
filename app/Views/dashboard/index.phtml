@@ -1,0 +1,20 @@
+<?php
+$title = 'Dasbor';
+$user = $user ?? null;
+require __DIR__ . '/../layouts/header.phtml';
+?>
+<h1>Dasbor</h1>
+<p>Selamat datang, <b><?= \App\Core\View::e($user['nama'] ?? '') ?></b> (<?= \App\Core\View::e($user['role_code'] ?? '') ?>).</p>
+<div class="grid">
+  <div class="card"><h3>Petugas (pool orang)</h3><p class="big"><?= (int) ($ringkas['orang_total'] ?? 0) ?> <small>total · <?= (int) ($ringkas['orang_aktif'] ?? 0) ?> aktif</small></p><a href="/petugas">Kelola →</a></div>
+  <div class="card"><h3>Akun login</h3><p class="big"><?= (int) ($ringkas['user_total'] ?? 0) ?> <small>total · <?= (int) ($ringkas['user_aktif'] ?? 0) ?> aktif</small></p><?php if (($user['role_code'] ?? '') === 'ADMIN'): ?><a href="/users">Kelola →</a><?php endif; ?></div>
+</div>
+<h2>Aktivitas terakhir</h2>
+<table>
+<tr><th>Waktu</th><th>User</th><th>Aksi</th><th>Tabel</th><th>ID</th></tr>
+<?php foreach ($logs as $l): ?>
+<tr><td><?= \App\Core\View::e($l['created_at']) ?></td><td><?= \App\Core\View::e($l['nama_user'] ?? ('#'.$l['user_id'])) ?></td><td><?= \App\Core\View::e($l['aksi']) ?></td><td><?= \App\Core\View::e($l['tabel_target']) ?></td><td><?= \App\Core\View::e((string) $l['id_target']) ?></td></tr>
+<?php endforeach; ?>
+</table>
+<p class="muted">Tahap 1: manajemen user + petugas. Master SLS / periode / penugasan menyusul tahap 2.</p>
+<?php require __DIR__ . '/../layouts/footer.phtml'; ?>

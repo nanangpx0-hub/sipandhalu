@@ -1,0 +1,37 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Core\View;
+
+/** @var string $title */
+/** @var array|null $user */
+$user = $user ?? ($_SESSION['user'] ?? null);
+?>
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title><?= View::e(($title ?? 'SIPANDHALU') . ' — SIPANDHALU') ?></title>
+<link rel="stylesheet" href="/assets/css/app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="logo">◈</span> SIPANDHALU <small>Susenas–Seruti Jember</small></div>
+  <?php if ($user): ?>
+  <nav>
+    <a href="/">Dasbor</a>
+    <a href="/petugas">Petugas</a>
+    <a href="/sls">SLS</a>
+    <a href="/periode">Periode</a>
+    <?php if (($user['role_code'] ?? '') === 'ADMIN'): ?><a href="/users">Users</a><?php endif; ?>
+    <a href="/password">Password</a>
+    <form method="post" action="/logout" style="display:inline"><?= \App\Core\Csrf::field() ?><button class="link" type="submit">Keluar (<?= View::e($user['nama'] ?? '') ?>)</button></form>
+  </nav>
+  <?php endif; ?>
+</header>
+<main class="wrap">
+<?php if (!empty($success)): ?><div class="alert ok"><?= View::e((string) $success) ?></div><?php endif; ?>
+<?php if (!empty($error)): ?><div class="alert err"><?= View::e((string) $error) ?></div><?php endif; ?>
+<?php if (!empty($warning)): ?><div class="alert warn"><?= View::e((string) $warning) ?></div><?php endif; ?>

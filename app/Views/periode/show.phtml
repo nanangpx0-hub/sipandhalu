@@ -1,0 +1,36 @@
+<?php
+$title = 'Periode ' . ($row['label'] ?? '');
+require __DIR__ . '/../layouts/header.phtml';
+?>
+<h1><?= \App\Core\View::e($row['label']) ?> <small><?= \App\Core\View::e($row['status']) ?></small></h1>
+<div class="grid">
+<div class="card"><h3>Ringkasan</h3>
+<p>SLS: <b><?= (int)($ringkas['n_sls']??0) ?></b> · Target: <b><?= (int)($ringkas['target']??0) ?></b> (28×10=280)<br>
+Muatan: <?= (int)($ringkas['muatan']??0) ?> · KK: <?= (int)($ringkas['kk']??0) ?> · RT: <?= (int)($ringkas['rt']??0) ?><br>
+Dok VSEN: <?= (int)($ringkas['dok']??0) ?> · Peta: <?= (int)($ringkas['peta']??0) ?></p>
+<form method="post" action="/periode/<?= (int)$row['id'] ?>/status"><?= $csrf ?>
+<select name="status"><option>DRAFT</option><option>AKTIF</option><option>TUTUP</option></select>
+<button>Ubah status</button> <small class="muted">DRAFT→AKTIF→TUTUP</small></form></div>
+<div class="card"><h3>Beban pengolah</h3>
+<table><tr><th>Pengolah</th><th>SLS</th><th>#</th></tr>
+<?php foreach ($beban as $b): ?><tr><td><?= \App\Core\View::e($b['pengolah']) ?></td><td><?= (int)$b['n_sls'] ?></td><td>#<?= (int)$b['peringkat'] ?></td></tr><?php endforeach; ?>
+<?php if ($beban===[]): ?><tr><td colspan="3" class="muted">Belum ada penugasan.</td></tr><?php endif; ?></table></div>
+</div>
+<h2>Sampel (level SLS)</h2>
+<form method="post" action="/periode/<?= (int)$row['id'] ?>/sampel" class="toolbar"><?= $csrf ?>
+<input name="nks" placeholder="tambah NKS, cth 56361" maxlength="5"><button>Tambah SLS</button></form>
+<table>
+<tr><th>NKS</th><th>SLS</th><th>Target</th><th>PCL / PML / Pengolah</th><th>Assign (id orang)</th></tr>
+<?php foreach ($sampel as $s): ?>
+<tr><td><b><?= \App\Core\View::e($s['nks']) ?></b></td>
+<td><small><?= \App\Core\View::e($s['nama_sls'] ?? '') ?><br><?= \App\Core\View::e($s['kec'].'/'.$s['desa']) ?></small></td>
+<td><?= (int)$s['target_sampel'] ?></td>
+<td><small><?= \App\Core\View::e($s['pcl']??'—') ?> / <?= \App\Core\View::e($s['pml']??'—') ?> / <?= \App\Core\View::e($s['pengolah']??'—') ?></small></td>
+<td><form method="post" action="/periode/<?= (int)$row['id'] ?>/assign"><?= $csrf ?>
+<input type="hidden" name="sampel_id" value="<?= (int)$s['id'] ?>">
+<input name="pcl_id" size="3" placeholder="pcl"> <input name="pml_id" size="3" placeholder="pml"> <input name="pengolah_id" size="3" placeholder="olah">
+<button class="link">simpan</button></form></td></tr>
+<?php endforeach; ?>
+</table>
+<p class="muted">Total <?= (int)$total ?> SLS di periode ini. Aturan K4: 1 orang 1 peran/periode.</p>
+<?php require __DIR__ . '/../layouts/footer.phtml'; ?>

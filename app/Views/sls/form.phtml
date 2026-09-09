@@ -1,0 +1,29 @@
+<?php
+$title = $mode === 'create' ? 'Tambah SLS' : 'Ubah SLS';
+require __DIR__ . '/../layouts/header.phtml';
+$action = $mode === 'create' ? '/sls' : '/sls/' . (int) $id;
+?>
+<h1><?= \App\Core\View::e($title) ?></h1>
+<form method="post" action="<?= $action ?>" class="card">
+<?= $csrf ?>
+<label>Kode SLS 16 digit (cth 3509010001000100)<input name="kode_full" maxlength="16" value="<?= \App\Core\View::e($row['kode_full'] ?? '') ?>"></label>
+<?php if (!empty($errors['kode_full'])): ?><div class="ferr"><?= \App\Core\View::e($errors['kode_full']) ?></div><?php endif; ?>
+<p class="muted">Atau isi pecahan (kode dirakit otomatis 35+09+kec+desa+sls+sub):</p>
+<label>Kec (3)<input name="kec" maxlength="3" value="<?= \App\Core\View::e($row['kec'] ?? '') ?>"></label>
+<label>Desa (3)<input name="desa" maxlength="3" value="<?= \App\Core\View::e($row['desa'] ?? '') ?>"></label>
+<label>SLS (4, cth 0042)<input name="sls" maxlength="4" value="<?= \App\Core\View::e($row['sls'] ?? '') ?>"></label>
+<label>Sub (2, cth 00)<input name="sub" maxlength="2" value="<?= \App\Core\View::e($row['sub'] ?? '') ?>"></label>
+<label>NKS 5 digit*<input name="nks" required maxlength="5" value="<?= \App\Core\View::e($row['nks'] ?? '') ?>"></label>
+<?php if (!empty($errors['nks'])): ?><div class="ferr"><?= \App\Core\View::e($errors['nks']) ?></div><?php endif; ?>
+<label>Dusun<input name="dusun" value="<?= \App\Core\View::e($row['dusun'] ?? '') ?>"></label>
+<label>RW<input name="rw" value="<?= \App\Core\View::e($row['rw'] ?? '') ?>"></label>
+<label>RT<input name="rt" value="<?= \App\Core\View::e($row['rt'] ?? '') ?>"></label>
+<label>Nama SLS<input name="nama_sls" value="<?= \App\Core\View::e($row['nama_sls'] ?? '') ?>"></label>
+<label>Ketua<input name="ketua" value="<?= \App\Core\View::e($row['ketua'] ?? '') ?>"></label>
+<label>Klasifikasi<select name="klasifikasi"><option value="">—</option><option value="1" <?= (($row['klasifikasi']??'')==='1'||($row['klasifikasi']??'')===1)?'selected':'' ?>>1 Perkotaan</option><option value="2" <?= (($row['klasifikasi']??'')==='2'||($row['klasifikasi']??'')===2)?'selected':'' ?>>2 Perdesaan</option></select></label>
+<label>Jml KK<input name="jml_kk" type="number" value="<?= \App\Core\View::e((string)($row['jml_kk'] ?? '')) ?>"></label>
+<label>Jml RT<input name="jml_rt" type="number" value="<?= \App\Core\View::e((string)($row['jml_rt'] ?? '')) ?>"></label>
+<label><input type="checkbox" name="is_aktif" value="1" <?= ((int)($row['is_aktif']??1)===1)?'checked':'' ?>> Aktif</label>
+<button>Simpan</button> <a href="/sls">Batal</a>
+</form>
+<?php require __DIR__ . '/../layouts/footer.phtml'; ?>

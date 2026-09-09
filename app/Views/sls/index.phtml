@@ -1,0 +1,25 @@
+<?php
+$title = 'Master SLS';
+require __DIR__ . '/../layouts/header.phtml';
+?>
+<h1>Master SLS <small>(1 SLS = 1 RT · NKS stabil, kode 16 digit)</small></h1>
+<form method="get" class="toolbar">
+<input name="q" placeholder="Cari NKS / kode / nama…" value="<?= \App\Core\View::e($q) ?>">
+<select name="kec"><option value="all">Semua kec</option><?php foreach ($kecs as $k): ?><option value="<?= \App\Core\View::e($k['kode']) ?>" <?= $kec===$k['kode']?'selected':'' ?>><?= \App\Core\View::e($k['kode'].' - '.$k['nama']) ?></option><?php endforeach; ?></select>
+<button>Cari</button> <a class="btn" href="/sls/baru">+ Tambah</a>
+</form>
+<table>
+<tr><th>NKS</th><th>Kode 16</th><th>Kec–Desa</th><th>RT/RW/Dusun</th><th>Status</th><th></th></tr>
+<?php foreach ($rows as $r): ?>
+<tr>
+<td><b><?= \App\Core\View::e($r['nks']) ?></b></td>
+<td><small><?= \App\Core\View::e($r['kode_full'] ?? '— (belum padan)') ?></small></td>
+<td><?= \App\Core\View::e($r['kec']) ?> - <?= \App\Core\View::e($r['nama_kec'] ?? '') ?><br><small><?= \App\Core\View::e($r['desa']) ?> - <?= \App\Core\View::e($r['nama_desa'] ?? '') ?></small></td>
+<td><small><?= \App\Core\View::e(trim(($r['rt']??'').'/'.($r['rw']??'').' '.($r['dusun']??''))) ?></small></td>
+<td><?= ((int) $r['is_aktif']===1?'Aktif':'Nonaktif') ?></td>
+<td><a href="/sls/<?= (int) $r['id'] ?>/edit">Ubah</a></td>
+</tr>
+<?php endforeach; ?>
+</table>
+<p class="muted">Total <?= (int) $total ?> SLS.</p>
+<?php require __DIR__ . '/../layouts/footer.phtml'; ?>

@@ -1,0 +1,10 @@
+<?php $title = 'Login'; require __DIR__ . '/../layouts/header.phtml'; ?>
+<h1>Masuk SIPANDHALU</h1>
+<p class="muted">Sistem Informasi Pandhalungan Susenas–Seruti · Kab. Jember</p>
+<form method="post" action="/login" class="card">
+  <?= $csrf ?>
+  <label>Email<input type="email" name="email" required value="<?= \App\Core\View::e($old['email'] ?? '') ?>"></label>
+  <label>Password<input type="password" name="password" required></label>
+  <button type="submit">Masuk</button>
+</form>
+<?php require __DIR__ . '/../layouts/footer.phtml'; ?>

@@ -1,0 +1,20 @@
+<?php
+$title = $mode === 'create' ? 'Tambah Petugas' : 'Ubah Petugas';
+require __DIR__ . '/../layouts/header.phtml';
+$action = $mode === 'create' ? '/petugas' : '/petugas/' . (int) $id;
+?>
+<h1><?= \App\Core\View::e($title) ?></h1>
+<form method="post" action="<?= $action ?>" class="card">
+<?= $csrf ?>
+<label>Nama lengkap*<input name="nama" required maxlength="100" value="<?= \App\Core\View::e($row['nama'] ?? '') ?>"></label>
+<?php if (!empty($errors['nama'])): ?><div class="ferr"><?= \App\Core\View::e($errors['nama']) ?></div><?php endif; ?>
+<label>No HP<input name="no_hp" maxlength="20" value="<?= \App\Core\View::e($row['no_hp'] ?? '') ?>"></label>
+<?php if (!empty($errors['no_hp'])): ?><div class="ferr"><?= \App\Core\View::e($errors['no_hp']) ?></div><?php endif; ?>
+<label>Email<input name="email" type="email" maxlength="190" value="<?= \App\Core\View::e($row['email'] ?? '') ?>"></label>
+<?php if (!empty($errors['email'])): ?><div class="ferr"><?= \App\Core\View::e($errors['email']) ?></div><?php endif; ?>
+<label>Alamat<input name="alamat" maxlength="255" value="<?= \App\Core\View::e($row['alamat'] ?? '') ?>"></label>
+<label><input type="checkbox" name="is_aktif" value="1" <?= ((int) ($row['is_aktif'] ?? 1) === 1) ? 'checked' : '' ?>> Aktif</label>
+<button>Simpan</button> <a href="/petugas">Batal</a>
+</form>
+<p class="muted">Nama disimpan Title Case + TRIM. Varian tulisan (misal Junaidi / Junaidi Ari Siswanto) dikelola di menu Alias pada detail petugas.</p>
+<?php require __DIR__ . '/../layouts/footer.phtml'; ?>

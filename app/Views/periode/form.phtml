@@ -1,0 +1,20 @@
+<?php
+$title = 'Buat Periode';
+require __DIR__ . '/../layouts/header.phtml';
+?>
+<h1>Buat Periode</h1>
+<form method="post" action="/periode" class="card">
+<?= $csrf ?>
+<label>Tahun*<input name="tahun" type="number" min="2020" max="2035" value="<?= \App\Core\View::e((string)($row['tahun'] ?? '2026')) ?>"></label>
+<label>Jenis*<select name="jenis">
+<?php foreach (['SERUTI_Q1','SERUTI_Q2','SERUTI_Q3','SERUTI_Q4','SUSENAS_S1','SUSENAS_S2'] as $j): ?>
+<option <?= (($row['jenis']??'')===$j)?'selected':'' ?>><?= $j ?></option>
+<?php endforeach; ?></select></label>
+<?php if (!empty($errors['jenis'])): ?><div class="ferr"><?= \App\Core\View::e($errors['jenis']) ?></div><?php endif; ?>
+<label>Label<input name="label" placeholder="2026-S2 Susenas September" value="<?= \App\Core\View::e($row['label'] ?? '') ?>"></label>
+<label>Mulai<input name="tgl_mulai" type="date" value="<?= \App\Core\View::e($row['tgl_mulai'] ?? '') ?>"></label>
+<label>Selesai<input name="tgl_selesai" type="date" value="<?= \App\Core\View::e($row['tgl_selesai'] ?? '') ?>"></label>
+<label>Catatan<input name="catatan" value="<?= \App\Core\View::e($row['catatan'] ?? '') ?>"></label>
+<button>Simpan</button>
+</form>
+<?php require __DIR__ . '/../layouts/footer.phtml'; ?>

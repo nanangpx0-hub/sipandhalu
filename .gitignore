@@ -1,0 +1,6 @@
+.env
+/vendor/
+/storage/*
+!/storage/.gitkeep
+*.log
+.phpunit.result.cache

@@ -1,0 +1,20 @@
+<?php
+$title = $mode === 'create' ? 'Tambah User' : 'Ubah User';
+require __DIR__ . '/../layouts/header.phtml';
+$action = $mode === 'create' ? '/users' : '/users/' . (int) $id;
+?>
+<h1><?= \App\Core\View::e($title) ?></h1>
+<form method="post" action="<?= $action ?>" class="card">
+<?= $csrf ?>
+<label>Nama*<input name="nama" required value="<?= \App\Core\View::e($row['nama'] ?? '') ?>"></label>
+<?php if (!empty($errors['nama'])): ?><div class="ferr"><?= \App\Core\View::e($errors['nama']) ?></div><?php endif; ?>
+<label>Email*<input name="email" type="email" required value="<?= \App\Core\View::e($row['email'] ?? '') ?>"></label>
+<?php if (!empty($errors['email'])): ?><div class="ferr"><?= \App\Core\View::e($errors['email']) ?></div><?php endif; ?>
+<label>Password <?= $mode === 'create' ? '*' : '(kosongkan jika tidak ganti)' ?><input name="password" type="password" <?= $mode === 'create' ? 'required minlength="8"' : 'minlength="8"' ?>></label>
+<?php if (!empty($errors['password'])): ?><div class="ferr"><?= \App\Core\View::e($errors['password']) ?></div><?php endif; ?>
+<label>Peran*<select name="role_id" required><?php foreach ($roles as $ro): ?><option value="<?= (int) $ro['id'] ?>" <?= ((string) ($row['role_id'] ?? '') === (string) $ro['id']) ? 'selected' : '' ?>><?= \App\Core\View::e($ro['label']) ?> (<?= \App\Core\View::e($ro['code']) ?>)</option><?php endforeach; ?></select></label>
+<label>Link ke petugas (pool orang)<select name="orang_id"><option value="">— tanpa link —</option><?php foreach ($orangOptions as $o): ?><option value="<?= (int) $o['id'] ?>" <?= ((string) ($row['orang_id'] ?? '') === (string) $o['id']) ? 'selected' : '' ?>><?= \App\Core\View::e($o['nama']) ?></option><?php endforeach; ?></select></label>
+<label><input type="checkbox" name="is_aktif" value="1" <?= ((int) ($row['is_aktif'] ?? 1) === 1) ? 'checked' : '' ?>> Aktif</label>
+<button>Simpan</button> <a href="/users">Batal</a>
+</form>
+<?php require __DIR__ . '/../layouts/footer.phtml'; ?>
