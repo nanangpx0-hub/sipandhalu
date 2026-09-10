@@ -125,6 +125,7 @@ storage/logs/      Log aplikasi
 - [Instalasi & Konfigurasi](docs/INSTALASI.md)
 - [Panduan Penggunaan & Login](docs/PANDUAN-PENGGUNAAN.md)
 - [Skema Database & Keputusan Desain](docs/SKEMA-DATABASE.md)
+- [Pindah ke Komputer Lain](docs/PINDAH-KOMPUTER.md) — clone+seed vs dump/restore, verifikasi, troubleshooting, FAQ
 
 ## Testing
 

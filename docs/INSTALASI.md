@@ -49,6 +49,11 @@ php -S localhost:8091 -t public
 
 ## Pindah ke Komputer Lain
 
+Panduan lengkap (2 jalur + verifikasi + troubleshooting + FAQ):
+**[docs/PINDAH-KOMPUTER.md](PINDAH-KOMPUTER.md)**
+
+Ringkasnya:
+
 ### Jalur A — Install Bersih dari Repo (tanpa data kerja)
 
 ```bash
