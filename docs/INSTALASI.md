@@ -47,6 +47,53 @@ php -S localhost:8091 -t public
 
 > Hanya folder `public/` yang boleh terekspos web server.
 
+## Pindah ke Komputer Lain
+
+### Jalur A — Install Bersih dari Repo (tanpa data kerja)
+
+```bash
+git clone https://github.com/nanangpx0-hub/sipandhalu.git
+cd sipandhalu
+composer install
+copy .env.example .env          # sesuaikan DB_USER/DB_PASS
+# lalu lanjut "Langkah Instalasi" no. 3-5 di atas (buat DB + migrate + seed berurutan)
+```
+
+Hasilnya identik dengan kondisi awal karena semua data dibangun dari seed yang ikut repo.
+Yang TIDAK ikut git: `.env` (buang dari `.env.example`), `vendor/` (composer install),
+`storage/logs` (otomatis), `data/` (sengaja diabaikan — berisi dokumen BPS RAHASIA;
+salin manual lewat flashdisk jika perlu).
+
+### Jalur B — Bawa Database Aktual (dump/restore)
+
+Di komputer lama:
+```bash
+mysqldump -u root --single-transaction --routines --triggers --databases sipandhalu > sipandhalu-backup.sql
+```
+
+Di komputer baru (setelah clone + composer + `.env`):
+```bash
+mysql -u root < sipandhalu-backup.sql
+# file dump self-contained: sudah menyertakan CREATE DATABASE + USE sipandhalu
+```
+
+File backup contoh tersedia di `storage/backup/sipandhalu-2026-09-10.sql`
+(sudah diuji restore: 51 orang, 13 users, 18 kecamatan, 27 desa, 28 SLS, 3 periode,
+66 sampel, 66 penugasan). Folder `storage/backup` tidak ikut git — salin manual.
+
+> **Catatan sensitivitas:** dump berisi data yang sama dengan seed (nama petugas, SLS,
+> hasil pemutakhiran). Simpan seperti dokumen kerja BPS — jangan di-commit atau
+> diunggah ke tempat publik, terutama bila nanti berisi data hasil lapangan asli.
+
+### Verifikasi Setelah Pindah
+
+```bash
+php vendor/phpunit/phpunit/phpunit --testdox   # OK (8 tests, 34 assertions)
+php tests/smoke_tahap1.php                      # 10/10 OK
+```
+
+Lalu login dengan akun demo (lihat [Panduan Penggunaan](PANDUAN-PENGGUNAAN.md)).
+
 ## Testing
 
 ```bash
