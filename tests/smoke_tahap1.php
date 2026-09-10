@@ -38,12 +38,12 @@ $ok('koneksi PDO sipandhalu', function (): void {
     Database::connection()->query('SELECT 1');
 });
 
-$ok('seed: 8 orang + 9 users + 5 alias', function (): void {
+$ok('seed baseline minimal: >=8 orang, >=9 users, >=5 alias (004 dummy boleh menambah)', function (): void {
     $pdo = Database::connection();
     $o = (int) $pdo->query('SELECT COUNT(*) FROM orang')->fetchColumn();
     $u = (int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
     $a = (int) $pdo->query('SELECT COUNT(*) FROM orang_alias')->fetchColumn();
-    if ($o !== 8 || $u !== 9 || $a !== 5) {
+    if ($o < 8 || $u < 9 || $a < 5) {
         throw new RuntimeException("orang=$o users=$u alias=$a");
     }
 });

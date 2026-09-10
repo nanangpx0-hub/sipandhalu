@@ -4,3 +4,7 @@
 !/storage/.gitkeep
 *.log
 .phpunit.result.cache
+# Data BPS sensitif (RAHASIA, PII) - jangan pernah di-commit
+/data/
+~$*
+
