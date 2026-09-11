@@ -4,7 +4,7 @@
 
 | Komponen | Versi | Catatan |
 |---|---|---|
-| PHP | 8.2+ | ekstensi `pdo_mysql`, `mbstring`, `openssl` |
+| PHP | 8.2+ | ekstensi `pdo_mysql`, `mbstring`, `openssl`, `zip`, `xml`, `fileinfo`, `gd` (tiga terakhir untuk import/export Excel) |
 | MySQL | 8.0+ | charset `utf8mb4`, collation `utf8mb4_unicode_ci` |
 | Composer | 2.x | untuk autoload + PHPUnit (dev) |
 | Laragon | full | lingkungan pengembangan yang dipakai |

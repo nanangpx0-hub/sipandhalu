@@ -8,7 +8,7 @@ misalnya dari komputer kantor ke laptop, atau ke komputer rekan.
 | Komponen | Versi | Cara cek |
 |---|---|---|
 | PHP | 8.2+ | `php -v` |
-| Ekstensi PHP | `pdo_mysql`, `mbstring`, `openssl` | `php -m` |
+| Ekstensi PHP | `pdo_mysql`, `mbstring`, `openssl`, `zip`, `xml`, `fileinfo`, `gd` | `php -m` |
 | MySQL | 8.0+ | `mysql --version` |
 | Composer | 2.x | `composer --version` |
 | Git | bebas | `git --version` |
