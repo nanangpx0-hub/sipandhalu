@@ -2,14 +2,60 @@
 $title = 'Periode';
 require __DIR__ . '/../layouts/header.phtml';
 ?>
-<h1>Periode <small>(Seruti Q1–Q4, Susenas S1–S2 — satu frame SLS)</small></h1>
-<p><a class="btn" href="/periode/baru">+ Buat periode</a></p>
-<table>
-<tr><th>Label</th><th>Jenis</th><th>Status</th><th></th></tr>
-<?php foreach ($rows as $r): ?>
-<tr><td><a href="/periode/<?= (int) $r['id'] ?>"><?= \App\Core\View::e($r['label']) ?></a></td>
-<td><?= \App\Core\View::e($r['jenis']) ?></td><td><?= \App\Core\View::e($r['status']) ?></td>
-<td><a href="/periode/<?= (int) $r['id'] ?>">Buka →</a></td></tr>
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+  <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-calendar-alt mr-2 text-primary"></i>Periode <small class="text-muted h6">Seruti Q1–Q4 · Susenas S1–S2 — satu frame SLS</small></h1>
+  <div class="mb-1">
+    <a class="btn btn-outline-success shadow-sm" href="/periode/export"><i class="fas fa-file-excel mr-1"></i>Export</a>
+    <a class="btn btn-success shadow-sm" href="/periode/baru"><i class="fas fa-plus mr-1"></i>Buat Periode</a>
+  </div>
+</div>
+
+<?php if (!empty($success)): ?><div class="alert alert-success alert-dismissible fade show"><i class="fas fa-check-circle mr-2"></i><?= \App\Core\View::e($success) ?><button type="button" class="close" data-dismiss="alert">&times;</button></div><?php endif; ?>
+<?php if (!empty($error)): ?><div class="alert alert-danger alert-dismissible fade show"><i class="fas fa-exclamation-circle mr-2"></i><?= \App\Core\View::e($error) ?><button type="button" class="close" data-dismiss="alert">&times;</button></div><?php endif; ?>
+
+<?php
+$nAktif = count(array_filter($rows, fn ($r) => $r['status'] === 'AKTIF'));
+$nDraft = count(array_filter($rows, fn ($r) => $r['status'] === 'DRAFT'));
+$nTutup = count(array_filter($rows, fn ($r) => $r['status'] === 'TUTUP'));
+?>
+<div class="row">
+  <div class="col-6 col-md-4 col-xl-3"><div class="info-box shadow-sm mb-3"><span class="info-box-icon bg-primary"><i class="fas fa-layer-group"></i></span><div class="info-box-content"><span class="info-box-text">Total Periode</span><span class="info-box-number"><?= count($rows) ?></span></div></div></div>
+  <div class="col-6 col-md-4 col-xl-3"><div class="info-box shadow-sm mb-3"><span class="info-box-icon bg-success"><i class="fas fa-play-circle"></i></span><div class="info-box-content"><span class="info-box-text">Sedang AKTIF</span><span class="info-box-number"><?= $nAktif ?></span></div></div></div>
+  <div class="col-6 col-md-4 col-xl-3"><div class="info-box shadow-sm mb-3"><span class="info-box-icon bg-secondary"><i class="fas fa-pencil-ruler"></i></span><div class="info-box-content"><span class="info-box-text">DRAFT</span><span class="info-box-number"><?= $nDraft ?></span></div></div></div>
+  <div class="col-6 col-md-4 col-xl-3"><div class="info-box shadow-sm mb-3"><span class="info-box-icon bg-dark"><i class="fas fa-lock"></i></span><div class="info-box-content"><span class="info-box-text">TUTUP</span><span class="info-box-number"><?= $nTutup ?></span></div></div></div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-header border-0">
+    <h3 class="card-title font-weight-bold"><i class="fas fa-list mr-1 text-muted"></i>Daftar Periode</h3>
+    <div class="card-tools"><span class="badge badge-light border text-muted">DRAFT → AKTIF → TUTUP</span></div>
+  </div>
+  <div class="card-body p-0 table-responsive">
+  <table class="table table-striped table-hover table-valign-middle data-table">
+  <thead class="thead-light"><tr><th>Label</th><th>Jenis</th><th class="text-center">Status</th><th>Rentang Waktu</th><th class="text-center" style="width:90px">Aksi</th></tr></thead>
+<?php
+$badgeJenis = static fn (string $j): string => str_starts_with($j, 'SERUTI') ? 'badge-info' : 'badge-primary';
+foreach ($rows as $r):
+  $st = $r['status'];
+  $badgeSt = ['DRAFT' => 'badge-secondary', 'AKTIF' => 'badge-success', 'TUTUP' => 'badge-dark'][$st] ?? 'badge-light';
+  $iconSt = ['DRAFT' => 'fa-pencil-ruler', 'AKTIF' => 'fa-play-circle', 'TUTUP' => 'fa-lock'][$st] ?? 'fa-circle';
+?>
+  <tr>
+    <td><a class="font-weight-bold" href="/periode/<?= (int) $r['id'] ?>"><i class="far fa-calendar mr-1 text-muted"></i><?= \App\Core\View::e($r['label']) ?></a></td>
+    <td><span class="badge <?= $badgeJenis((string) $r['jenis']) ?>"><?= \App\Core\View::e($r['jenis']) ?></span></td>
+    <td class="text-center"><span class="badge <?= $badgeSt ?>"><i class="fas <?= $iconSt ?> mr-1"></i><?= \App\Core\View::e($st) ?></span></td>
+    <td class="text-muted small text-nowrap">
+      <?php if (!empty($r['tgl_mulai']) || !empty($r['tgl_selesai'])): ?>
+      <i class="far fa-clock mr-1"></i><?= \App\Core\View::e((string) ($r['tgl_mulai'] ?? '—')) ?> s.d. <?= \App\Core\View::e((string) ($r['tgl_selesai'] ?? '—')) ?>
+      <?php else: ?><span class="text-muted">—</span><?php endif; ?>
+    </td>
+    <td class="text-center"><a class="btn btn-sm btn-outline-primary" href="/periode/<?= (int) $r['id'] ?>" data-toggle="tooltip" title="Buka detail periode"><i class="fas fa-folder-open"></i></a></td>
+  </tr>
 <?php endforeach; ?>
-</table>
+<?php if ($rows === []): ?>
+  <tr><td colspan="5" class="text-center text-muted py-4"><i class="fas fa-inbox fa-2x d-block mb-2"></i>Belum ada periode — klik "Buat Periode" untuk memulai.</td></tr>
+<?php endif; ?>
+  </table>
+  </div>
+</div>
 <?php require __DIR__ . '/../layouts/footer.phtml'; ?>

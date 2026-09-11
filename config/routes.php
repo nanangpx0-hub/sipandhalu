@@ -24,6 +24,9 @@ $router->post('/password', AuthController::class, 'updatePassword', [AuthMiddlew
 // Tahap 1: batasi tulis ke ADMIN saja agar aman.
 $router->get('/petugas', OrangController::class, 'index', [AuthMiddleware::class]);
 $router->get('/petugas/baru', OrangController::class, 'create', [AuthMiddleware::class]);
+$router->get('/petugas/export', OrangController::class, 'exportExcel', [AuthMiddleware::class]);
+$router->get('/petugas/template', OrangController::class, 'templateExcel', [AuthMiddleware::class]);
+$router->post('/petugas/import', OrangController::class, 'importExcel', [AuthMiddleware::class, CsrfMiddleware::class]);
 $router->post('/petugas', OrangController::class, 'store', [AuthMiddleware::class, CsrfMiddleware::class]);
 $router->get('/petugas/{id}', OrangController::class, 'show', [AuthMiddleware::class]);
 $router->get('/petugas/{id}/edit', OrangController::class, 'edit', [AuthMiddleware::class]);
@@ -44,6 +47,9 @@ $router->post('/users/{id}/reset', UserController::class, 'reset', [AuthMiddlewa
 // Master SLS (1 SLS = 1 RT)
 $router->get('/sls', SlsController::class, 'index', [AuthMiddleware::class]);
 $router->get('/sls/baru', SlsController::class, 'create', [AuthMiddleware::class]);
+$router->get('/sls/export', SlsController::class, 'exportExcel', [AuthMiddleware::class]);
+$router->get('/sls/template', SlsController::class, 'templateExcel', [AuthMiddleware::class]);
+$router->post('/sls/import', SlsController::class, 'importExcel', [AuthMiddleware::class, CsrfMiddleware::class]);
 $router->post('/sls', SlsController::class, 'store', [AuthMiddleware::class, CsrfMiddleware::class]);
 $router->get('/sls/{id}/edit', SlsController::class, 'edit', [AuthMiddleware::class]);
 $router->post('/sls/{id}', SlsController::class, 'update', [AuthMiddleware::class, CsrfMiddleware::class]);
@@ -51,6 +57,9 @@ $router->post('/sls/{id}', SlsController::class, 'update', [AuthMiddleware::clas
 // Periode + sampel + penugasan (level SLS)
 $router->get('/periode', PeriodeController::class, 'index', [AuthMiddleware::class]);
 $router->get('/periode/baru', PeriodeController::class, 'create', [AuthMiddleware::class]);
+$router->get('/periode/export', PeriodeController::class, 'exportExcel', [AuthMiddleware::class]);
+$router->get('/periode/{id}/template-sampel', PeriodeController::class, 'templateSampel', [AuthMiddleware::class]);
+$router->post('/periode/{id}/import-sampel', PeriodeController::class, 'importSampel', [AuthMiddleware::class, CsrfMiddleware::class]);
 $router->post('/periode', PeriodeController::class, 'store', [AuthMiddleware::class, CsrfMiddleware::class]);
 $router->get('/periode/{id}', PeriodeController::class, 'show', [AuthMiddleware::class]);
 $router->post('/periode/{id}/status', PeriodeController::class, 'setStatus', [AuthMiddleware::class, CsrfMiddleware::class]);

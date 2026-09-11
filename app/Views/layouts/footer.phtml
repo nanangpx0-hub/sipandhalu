@@ -1,4 +1,38 @@
-</main>
-<footer class="foot"><small>SIPANDHALU — Siji Data, Akeh Dulur · Ganti Triwulan, Ganti NKS, Tetap Siji Data</small></footer>
+      </div><!-- /.container-fluid -->
+    </section>
+    <!-- /.content -->
+  </div>
+  <!-- /.content-wrapper -->
+
+  <footer class="main-footer">
+    <strong>SIPANDHALU</strong> — Siji Data, Akeh Dulur · Ganti Triwulan, Ganti NKS, Tetap Siji Data
+    <div class="float-right d-none d-sm-inline"><small>Susenas–Seruti · Kab. Jember</small></div>
+  </footer>
+</div>
+<!-- ./wrapper -->
+
+<script src="/assets/vendor/js/jquery.min.js"></script>
+<script src="/assets/vendor/js/bootstrap.bundle.min.js"></script>
+<script src="/assets/adminlte/js/adminlte.min.js"></script>
+<script src="/assets/vendor/js/jquery.dataTables.min.js"></script>
+<script src="/assets/vendor/js/dataTables.bootstrap4.min.js"></script>
+<script>
+$(function () {
+  // Aktifkan DataTables pada semua tabel berclass .data-table
+  if ($.fn.DataTable) {
+    $('.data-table').each(function () {
+      var $t = $(this);
+      if (!$.fn.DataTable.isDataTable($t)) {
+        $t.DataTable({
+          order: [],
+          language: { url: 'https://cdn.datatables.net/plug-ins/1.13.8/i18n/id.json' }
+        });
+      }
+    });
+  }
+  // Tooltip Bootstrap
+  $('[data-toggle="tooltip"]').tooltip();
+});
+</script>
 </body>
 </html>

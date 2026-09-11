@@ -7,31 +7,107 @@ use App\Core\View;
 /** @var string $title */
 /** @var array|null $user */
 $user = $user ?? ($_SESSION['user'] ?? null);
+$isAdmin = (($user['role_code'] ?? '') === 'ADMIN');
+$active = function (string $prefix): string {
+    $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+    if ($prefix === '/') {
+        return ($uri === '/' || $uri === '') ? 'active' : '';
+    }
+    return str_starts_with($uri, $prefix) ? 'active' : '';
+};
 ?>
 <!doctype html>
 <html lang="id">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="x-ua-compatible" content="ie=edge">
 <title><?= View::e(($title ?? 'SIPANDHALU') . ' — SIPANDHALU') ?></title>
+<link rel="stylesheet" href="/assets/vendor/css/bootstrap.min.css">
+<link rel="stylesheet" href="/assets/vendor/css/fontawesome.all.min.css">
+<link rel="stylesheet" href="/assets/vendor/css/dataTables.bootstrap4.min.css">
+<link rel="stylesheet" href="/assets/adminlte/css/adminlte.min.css">
 <link rel="stylesheet" href="/assets/css/app.css">
 </head>
-<body>
-<header class="topbar">
-  <div class="brand"><span class="logo">◈</span> SIPANDHALU <small>Susenas–Seruti Jember</small></div>
-  <?php if ($user): ?>
-  <nav>
-    <a href="/">Dasbor</a>
-    <a href="/petugas">Petugas</a>
-    <a href="/sls">SLS</a>
-    <a href="/periode">Periode</a>
-    <?php if (($user['role_code'] ?? '') === 'ADMIN'): ?><a href="/users">Users</a><?php endif; ?>
-    <a href="/password">Password</a>
-    <form method="post" action="/logout" style="display:inline"><?= \App\Core\Csrf::field() ?><button class="link" type="submit">Keluar (<?= View::e($user['nama'] ?? '') ?>)</button></form>
+<body class="hold-transition sidebar-mini layout-navbar-fixed layout-footer-fixed accent-indigo">
+<div class="wrapper">
+
+  <!-- Navbar -->
+  <nav class="main-header navbar navbar-expand navbar-white navbar-light">
+    <ul class="navbar-nav">
+      <li class="nav-item">
+        <a class="nav-link" data-widget="pushmenu" href="#" role="button"><i class="fas fa-bars"></i></a>
+      </li>
+    </ul>
+    <ul class="navbar-nav ml-auto">
+      <li class="nav-item dropdown notifications-menu">
+        <a class="nav-link" data-toggle="dropdown" href="#" role="button" aria-haspopup="true" aria-expanded="false">
+          <i class="far fa-bell"></i>
+          <span class="badge badge-warning navbar-badge">0</span>
+        </a>
+        <div class="dropdown-menu dropdown-menu-lg dropdown-menu-right">
+          <span class="dropdown-header">Notifikasi</span>
+          <div class="dropdown-divider"></div>
+          <a href="#" class="dropdown-item">
+            <i class="fas fa-info-circle text-info mr-2"></i> Tidak ada notifikasi baru
+          </a>
+        </div>
+      </li>
+      <?php if ($user): ?>
+      <li class="nav-item dropdown user-menu">
+        <a href="#" class="nav-link dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
+          <i class="fas fa-user-circle"></i>
+          <span class="d-none d-md-inline ml-1"><?= View::e($user['nama'] ?? 'Pengguna') ?></span>
+        </a>
+        <div class="dropdown-menu dropdown-menu-right">
+          <a href="/password" class="dropdown-item"><i class="fas fa-key mr-2"></i> Ubah Password</a>
+          <div class="dropdown-divider"></div>
+          <form method="post" action="/logout"><?= \App\Core\Csrf::field() ?>
+            <button type="submit" class="dropdown-item text-danger"><i class="fas fa-sign-out-alt mr-2"></i> Keluar</button>
+          </form>
+        </div>
+      </li>
+      <?php endif; ?>
+    </ul>
   </nav>
-  <?php endif; ?>
-</header>
-<main class="wrap">
-<?php if (!empty($success)): ?><div class="alert ok"><?= View::e((string) $success) ?></div><?php endif; ?>
-<?php if (!empty($error)): ?><div class="alert err"><?= View::e((string) $error) ?></div><?php endif; ?>
-<?php if (!empty($warning)): ?><div class="alert warn"><?= View::e((string) $warning) ?></div><?php endif; ?>
+  <!-- /.navbar -->
+
+  <?php if ($user): ?>
+  <!-- Main Sidebar Container -->
+  <aside class="main-sidebar sidebar-dark-indigo elevation-4">
+    <a href="/" class="brand-link">
+      <span class="brand-image"><i class="fas fa-chart-bar" style="font-size:1.4rem"></i></span>
+      <span class="brand-text font-weight-light">SIPANDHALU</span>
+    </a>
+    <div class="sidebar">
+      <div class="user-panel mt-3 pb-3 mb-3 d-flex">
+        <div class="info">
+          <a href="/password" class="d-block"><?= View::e($user['nama'] ?? '') ?></a>
+          <span class="text-muted" style="font-size:.8rem"><?= View::e($user['role_code'] ?? '') ?></span>
+        </div>
+      </div>
+      <nav class="mt-2">
+        <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
+          <li class="nav-item"><a href="/" class="nav-link <?= $active('/') ?>"><i class="nav-icon fas fa-tachometer-alt"></i><p>Dasbor</p></a></li>
+          <li class="nav-item"><a href="/petugas" class="nav-link <?= $active('/petugas') ?>"><i class="nav-icon fas fa-users"></i><p>Petugas</p></a></li>
+          <li class="nav-item"><a href="/sls" class="nav-link <?= $active('/sls') ?>"><i class="nav-icon fas fa-map-marked-alt"></i><p>SLS</p></a></li>
+          <li class="nav-item"><a href="/periode" class="nav-link <?= $active('/periode') ?>"><i class="nav-icon fas fa-calendar-alt"></i><p>Periode</p></a></li>
+          <?php if ($isAdmin): ?>
+          <li class="nav-header">ADMINISTRASI</li>
+          <li class="nav-item"><a href="/users" class="nav-link <?= $active('/users') ?>"><i class="nav-icon fas fa-user-shield"></i><p>Users</p></a></li>
+          <?php endif; ?>
+        </ul>
+      </nav>
+    </div>
+  </aside>
+  <!-- /.sidebar -->
+
+  <!-- Content Wrapper -->
+  <div class="content-wrapper">
+<?php endif; ?>
+    <!-- Main content -->
+    <section class="content pt-3">
+      <div class="container-fluid">
+      <?php if (!empty($success)): ?><div class="alert alert-success alert-dismissible fade show" role="alert"><?= View::e((string) $success) ?><button type="button" class="close" data-dismiss="alert" aria-label="Tutup"><span aria-hidden="true">&times;</span></button></div><?php endif; ?>
+      <?php if (!empty($error)): ?><div class="alert alert-danger alert-dismissible fade show" role="alert"><?= View::e((string) $error) ?><button type="button" class="close" data-dismiss="alert" aria-label="Tutup"><span aria-hidden="true">&times;</span></button></div><?php endif; ?>
+      <?php if (!empty($warning)): ?><div class="alert alert-warning alert-dismissible fade show" role="alert"><?= View::e((string) $warning) ?><button type="button" class="close" data-dismiss="alert" aria-label="Tutup"><span aria-hidden="true">&times;</span></button></div><?php endif; ?>

@@ -8,7 +8,7 @@ use App\Core\Request;
 use App\Core\Router;
 use App\Core\Session;
 
-$base = dirname(__DIR__);
+$base = dirname(__DIR__, 2);
 require $base . '/vendor/autoload.php';
 
 Config::loadEnv($base);

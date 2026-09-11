@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Core\Database;
+use App\Core\Excel;
 use App\Core\Request;
 use App\Core\Response;
 use App\Core\Session;
@@ -43,7 +44,104 @@ final class OrangController
             'q' => $q, 'status' => $status, 'page' => $page, 'perPage' => $perPage,
             'success' => Session::flash('success'),
             'error' => Session::flash('error'),
+            'import_errors' => Session::flash('import_errors') ?? [],
         ]);
+    }
+
+    /** GET /petugas/export — unduh xlsx semua petugas (mengikuti filter aktif). */
+    public function exportExcel(Request $req, array $params = []): void
+    {
+        $q = (string) ($req->get['q'] ?? '');
+        $status = (string) ($req->get['status'] ?? 'all');
+        $rows = [];
+        foreach ($this->repo->exportAll($q, $status) as $r) {
+            $rows[] = [
+                $r['nama'],
+                (string) ($r['no_hp'] ?? ''),
+                (string) ($r['email'] ?? ''),
+                (string) ($r['alamat'] ?? ''),
+                ((int) $r['is_aktif'] === 1 ? 'Aktif' : 'Nonaktif'),
+                (string) $r['jml_alias'],
+            ];
+        }
+        Excel::download(
+            'petugas_' . date('Ymd_His') . '.xlsx',
+            ['Nama', 'No HP', 'Email', 'Alamat', 'Status', 'Jml Alias'],
+            $rows,
+            'Petugas'
+        );
+    }
+
+    /** GET /petugas/template — unduh template impor. */
+    public function templateExcel(Request $req, array $params = []): void
+    {
+        Excel::download(
+            'template_petugas.xlsx',
+            ['Nama', 'No HP', 'Email', 'Alamat', 'Status'],
+            [
+                ['Junaidi Ari Siswanto', '081234567890', 'junaidi@mail.id', 'Jl. Bhayangkara 12, Sumbersari', 'Aktif'],
+                ['Aminatus Sholeha', '081298765432', '', 'Jl. Kalimantan 5, Kaliwates', 'Aktif'],
+            ],
+            'Petugas',
+            [
+                ['PETUNJUK IMPOR PETUGAS'],
+                ['1. Jangan ubah baris header / urutan kolom.'],
+                ['2. Kolom Nama wajib diisi (min. 3 huruf); nama yang sudah terdaftar akan DILEWATI.'],
+                ['3. Kolom Status: isi "Aktif" atau "Nonaktif" (kosong = Aktif).'],
+                ['4. Format file .xlsx, maksimal 2000 baris per impor.'],
+            ]
+        );
+    }
+
+    /** POST /petugas/import — impor petugas dari file Excel. */
+    public function importExcel(Request $req, array $params = []): void
+    {
+        $cek = Excel::cekUpload();
+        if ($cek !== null) {
+            Session::flash('error', $cek);
+            Response::redirect('/petugas');
+        }
+        try {
+            $data = Excel::readFirstSheet($_FILES['file_excel']['tmp_name']);
+        } catch (\Throwable $e) {
+            Session::flash('error', 'File Excel tidak valid / rusak: ' . $e->getMessage());
+            Response::redirect('/petugas');
+        }
+        if ($data['rows'] === []) {
+            Session::flash('error', 'File kosong — tidak ada baris data.');
+            Response::redirect('/petugas');
+        }
+        if (count($data['rows']) > Excel::maxImportRows()) {
+            Session::flash('error', 'Maksimal ' . Excel::maxImportRows() . ' baris per impor.');
+            Response::redirect('/petugas');
+        }
+        $ok = 0;
+        $errors = [];
+        foreach ($data['rows'] as $i => $row) {
+            $no = $i + 2; // +header
+            $in = [
+                'nama' => Excel::pick($row, ['Nama', 'Nama Lengkap', 'Nama Petugas']),
+                'no_hp' => Excel::pick($row, ['No HP', 'No. HP', 'HP', 'Telepon', 'WA', 'No HP/WA']),
+                'email' => Excel::pick($row, ['Email', 'E-mail']),
+                'alamat' => Excel::pick($row, ['Alamat', 'Alamat Rumah']),
+                'is_aktif' => Excel::statusToAktif(Excel::pick($row, ['Status'])),
+            ];
+            if ($in['nama'] === '') {
+                $errors[] = "Baris $no: Nama kosong — dilewati.";
+                continue;
+            }
+            $res = $this->svc->create($in, $this->actor(), $req->ip(), $req->userAgent());
+            if ($res['ok']) {
+                $ok++;
+            } else {
+                $errors[] = "Baris $no (" . $in['nama'] . '): ' . implode(' ', $res['errors']);
+            }
+        }
+        Session::flash('success', "Import selesai: $ok petugas berhasil ditambah, " . count($errors) . ' baris dilewati/gagal.');
+        if ($errors !== []) {
+            Session::flash('import_errors', $errors);
+        }
+        Response::redirect('/petugas');
     }
 
     public function create(Request $req, array $params = []): void

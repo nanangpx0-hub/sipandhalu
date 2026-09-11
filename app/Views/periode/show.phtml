@@ -18,7 +18,13 @@ Dok VSEN: <?= (int)($ringkas['dok']??0) ?> · Peta: <?= (int)($ringkas['peta']??
 </div>
 <h2>Sampel (level SLS)</h2>
 <form method="post" action="/periode/<?= (int)$row['id'] ?>/sampel" class="toolbar"><?= $csrf ?>
-<input name="nks" placeholder="tambah NKS, cth 56361" maxlength="5"><button>Tambah SLS</button></form>
+<input name="nks" placeholder="tambah NKS, cth 56361" maxlength="5"><button>Tambah SLS</button>
+<?php if ($row['status'] !== 'TUTUP'): ?>
+<a class="btn btn-outline-success" href="/periode/<?= (int)$row['id'] ?>/template-sampel"><i class="fas fa-download mr-1"></i>Template</a>
+<button type="button" class="btn btn-outline-primary" data-toggle="modal" data-target="#modalImport"><i class="fas fa-upload mr-1"></i>Import sampel</button>
+<?php endif; ?>
+</form>
+<?php $importUrl = '/periode/' . (int)$row['id'] . '/import-sampel'; $templateUrl = null; require __DIR__ . '/../layouts/import_excel.phtml'; ?>
 <table>
 <tr><th>NKS</th><th>SLS</th><th>Target</th><th>PCL / PML / Pengolah</th><th>Assign (id orang)</th></tr>
 <?php foreach ($sampel as $s): ?>

@@ -50,6 +50,31 @@ final class OrangRepository
         return ['data' => $stmt->fetchAll(), 'total' => $total];
     }
 
+    /** Semua baris untuk ekspor (dengan filter q/status, tanpa LIMIT). */
+    public function exportAll(string $q, string $status = 'all'): array
+    {
+        $where = [];
+        $params = [];
+        if ($q !== '') {
+            $where[] = '(o.nama LIKE :q1 OR o.email LIKE :q2 OR o.no_hp LIKE :q3)';
+            $params[':q1'] = '%' . $q . '%';
+            $params[':q2'] = '%' . $q . '%';
+            $params[':q3'] = '%' . $q . '%';
+        }
+        if ($status === 'aktif') {
+            $where[] = 'o.is_aktif = 1';
+        } elseif ($status === 'nonaktif') {
+            $where[] = 'o.is_aktif = 0';
+        }
+        $w = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+        $stmt = $this->pdo->prepare(
+            "SELECT o.*, (SELECT COUNT(*) FROM orang_alias a WHERE a.orang_id=o.id) AS jml_alias
+             FROM orang o {$w} ORDER BY o.nama ASC"
+        );
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
     public function find(int $id): ?array
     {
         $stmt = $this->pdo->prepare('SELECT * FROM orang WHERE id=:id LIMIT 1');

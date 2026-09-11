@@ -1,16 +1,87 @@
+/* SIPANDHALU — kustomisasi di atas AdminLTE 3 (Bootstrap 4) */
 :root{--tembakau:#6F4E37;--daun:#2D6A4F;--emas:#D4A017;--bg:#faf7f0}
-*{box-sizing:border-box}body{margin:0;font-family:system-ui,Segoe UI,Arial;background:var(--bg);color:#222}
-.topbar{display:flex;justify-content:space-between;align-items:center;background:#1f2937;color:#fff;padding:.6rem 1rem}
-.topbar a{color:#fff;margin-right:.8rem;text-decoration:none}.topbar .link{background:none;border:0;color:#fff;cursor:pointer;text-decoration:underline}
-.brand .logo{color:var(--emas)}.brand small{opacity:.7}
-.wrap{max-width:1000px;margin:1rem auto;padding:0 1rem}
-.card{background:#fff;border:1px solid #e5e0d5;border-radius:10px;padding:1rem;margin:.8rem 0}
+
+/* Branding: sidebar indigo dengan aksen emas pandhalungan */
+.sidebar-dark-indigo{--bs-navy:#2e3450}
+.sidebar-dark-indigo .brand-link{border-bottom:1px solid rgba(255,255,255,.1)}
+.sidebar-dark-indigo .brand-image{color:var(--emas);text-align:center;width:2rem}
+.sidebar-dark-indigo .nav-header{color:rgba(255,255,255,.5);letter-spacing:.05em}
+.sidebar-dark-indigo .nav-link>.nav-icon{color:rgba(255,255,255,.75)}
+
+/* Konten */
+h1,h2,h3{color:#2e3450;font-weight:600}
+.content h1 small,.content h2 small{color:#6b7280;font-size:.6em}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
-.big{font-size:1.6rem;margin:.3rem 0}
-table{width:100%;border-collapse:collapse;background:#fff;margin:.6rem 0}th,td{border:1px solid #e5e0d5;padding:.45rem .6rem;text-align:left;font-size:.92rem}
-.toolbar{display:flex;gap:.5rem;margin:.6rem 0;flex-wrap:wrap}
-input,select,button{padding:.5rem .6rem;border:1px solid #ccc;border-radius:8px}button,.btn{background:var(--daun);color:#fff;border:0;text-decoration:none;cursor:pointer;padding:.5rem .9rem;border-radius:8px;display:inline-block}
-.alert{padding:.6rem .8rem;border-radius:8px;margin:.6rem 0}.ok{background:#dcfce7}.err{background:#fee2e2}.warn{background:#fef3c7}
+@media (max-width:767.98px){.grid{grid-template-columns:1fr}}
+.big{font-size:1.8rem;font-weight:700;margin:.3rem 0}
+
+/* Kompatibilitas class lama (toolbar, muted, ferr) */
+.toolbar{display:flex;gap:.5rem;margin:.6rem 0;flex-wrap:wrap;align-items:center}
+.toolbar input,.toolbar select{height:calc(1.9em + .5rem + 2px);padding:.25rem .5rem;border:1px solid #ced4da;border-radius:.25rem}
+.toolbar .btn{background:var(--daun);color:#fff}
 .ferr{color:#b91c1c;font-size:.85rem;margin:-.3rem 0 .5rem}
-.muted{color:#6b7280;font-size:.88rem}.foot{text-align:center;color:#6b7280;padding:2rem 0}
+.muted{color:#6b7280;font-size:.88rem}
+
+/* Kartu form lama: label tanpa AdminLTE form-group */
 label{display:block;margin:.5rem 0}
+label>input,label>select{display:block;width:100%}
+
+/* DataTables + AdminLTE perbaikan tampilan */
+table.dataTable thead th{font-size:.85rem}
+.card-body table{margin:.2rem 0}
+
+/* Avatar inisial (halaman users & lainnya) */
+.avatar-initials{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;color:#fff;font-weight:700;font-size:.8rem;flex-shrink:0}
+
+/* Kartu & info-box lebih halus */
+.card.shadow-sm{border:1px solid #eceef3;border-radius:.5rem}
+.info-box{border-radius:.5rem;border:1px solid #eceef3}
+
+/* ===== Halaman periode/baru ===== */
+:root{--ph-indigo:#2e3450;--ph-emas:#D4A017;--ph-daun:#2D6A4F;--ph-line:#eceef3}
+
+/* Kepala halaman dengan aksen gradien halus */
+.ph-page-header{animation:phFadeDown .45s ease both}
+.ph-header-icon{display:inline-flex;align-items:center;justify-content:center;width:3.2rem;height:3.2rem;border-radius:.75rem;
+  background:linear-gradient(135deg,var(--ph-indigo),#4b5578);color:var(--ph-emas);font-size:1.35rem;
+  box-shadow:0 4px 10px rgba(46,52,80,.25)}
+.ph-breadcrumb{background:transparent;padding:0;font-size:.85rem}
+.ph-breadcrumb .breadcrumb-item+.breadcrumb-item::before{content:"\203A"}
+
+/* Kartu form utama */
+.ph-form-card{border:1px solid var(--ph-line);border-radius:.75rem;overflow:hidden;animation:phFadeUp .5s ease both}
+.ph-card-header{background:#f8f9fc;border-bottom:1px solid var(--ph-line);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem}
+.ph-card-footer{background:#fff;border-top:1px solid var(--ph-line)}
+.ph-fieldset{border:1px solid var(--ph-line);border-radius:.6rem;padding:1rem 1rem .25rem;margin-bottom:1.25rem;transition:border-color .25s ease,box-shadow .25s ease}
+.ph-fieldset:focus-within{border-color:#b9c0d4;box-shadow:0 0 0 .2rem rgba(46,52,80,.06)}
+.ph-fieldset-last{margin-bottom:.5rem}
+.ph-legend{float:left;width:auto;font-size:.95rem;font-weight:600;color:var(--ph-indigo);padding:0 .5rem;margin-bottom:.25rem}
+
+/* Elemen formulir */
+.ph-label{font-weight:600;color:#374151}
+.ph-form-group .form-control{border-radius:.375rem;transition:border-color .2s ease,box-shadow .2s ease}
+.ph-form-group .form-control:focus{border-color:var(--ph-indigo);box-shadow:0 0 0 .2rem rgba(46,52,80,.12)}
+.ph-form-group .input-group-text{background:#f4f5f9;border-color:#d7dbe6;color:#5b6275;min-width:2.6rem;justify-content:center}
+.has-error .form-control{border-color:#e05252}
+.has-error .ph-label{color:#b91c1c}
+.ph-form-group textarea.form-control{resize:vertical;min-height:90px}
+
+/* Tombol simpan */
+.ph-btn-submit{background:var(--ph-daun);border-color:var(--ph-daun);transition:transform .15s ease,box-shadow .2s ease,background-color .2s ease}
+.ph-btn-submit:hover{background:#255843;transform:translateY(-1px);box-shadow:0 6px 14px rgba(45,106,79,.3)}
+.ph-btn-submit:active{transform:translateY(0)}
+
+/* Panel bantuan */
+.ph-help-panel{border-left:4px solid var(--ph-emas) !important;animation:phFadeUp .55s ease both}
+
+/* Animasi */
+@keyframes phFadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes phFadeDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.ph-page-header,.ph-form-card,.ph-help-panel{animation:none}}
+
+/* Responsivitas halus */
+@media (max-width:575.98px){
+  .ph-header-icon{width:2.6rem;height:2.6rem;font-size:1.1rem}
+  .ph-fieldset{padding:.75rem .75rem .1rem}
+  .ph-btn-submit{width:100%}
+}

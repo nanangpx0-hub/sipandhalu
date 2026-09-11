@@ -1,20 +1,167 @@
 <?php
 $title = 'Buat Periode';
 require __DIR__ . '/../layouts/header.phtml';
+
+/** @var array $row */
+/** @var array $errors */
+$e = static fn (string $s): string => \App\Core\View::e($s);
+$jenisList = ['SERUTI_Q1' => 'Seruti Triwulan I', 'SERUTI_Q2' => 'Seruti Triwulan II', 'SERUTI_Q3' => 'Seruti Triwulan III', 'SERUTI_Q4' => 'Seruti Triwulan IV', 'SUSENAS_S1' => 'Susenas Semester I', 'SUSENAS_S2' => 'Susenas Semester II'];
+$jenisSelected = (string) ($row['jenis'] ?? '');
 ?>
-<h1>Buat Periode</h1>
-<form method="post" action="/periode" class="card">
-<?= $csrf ?>
-<label>Tahun*<input name="tahun" type="number" min="2020" max="2035" value="<?= \App\Core\View::e((string)($row['tahun'] ?? '2026')) ?>"></label>
-<label>Jenis*<select name="jenis">
-<?php foreach (['SERUTI_Q1','SERUTI_Q2','SERUTI_Q3','SERUTI_Q4','SUSENAS_S1','SUSENAS_S2'] as $j): ?>
-<option <?= (($row['jenis']??'')===$j)?'selected':'' ?>><?= $j ?></option>
-<?php endforeach; ?></select></label>
-<?php if (!empty($errors['jenis'])): ?><div class="ferr"><?= \App\Core\View::e($errors['jenis']) ?></div><?php endif; ?>
-<label>Label<input name="label" placeholder="2026-S2 Susenas September" value="<?= \App\Core\View::e($row['label'] ?? '') ?>"></label>
-<label>Mulai<input name="tgl_mulai" type="date" value="<?= \App\Core\View::e($row['tgl_mulai'] ?? '') ?>"></label>
-<label>Selesai<input name="tgl_selesai" type="date" value="<?= \App\Core\View::e($row['tgl_selesai'] ?? '') ?>"></label>
-<label>Catatan<input name="catatan" value="<?= \App\Core\View::e($row['catatan'] ?? '') ?>"></label>
-<button>Simpan</button>
-</form>
+
+<!-- Kepala halaman -->
+<div class="ph-page-header mb-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb ph-breadcrumb mb-2">
+      <li class="breadcrumb-item"><a href="/periode"><i class="fas fa-calendar-alt mr-1"></i>Periode</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Buat Periode</li>
+    </ol>
+  </nav>
+  <div class="d-flex align-items-center flex-wrap">
+    <span class="ph-header-icon mr-3" aria-hidden="true"><i class="fas fa-calendar-plus"></i></span>
+    <div class="flex-grow-1">
+      <h1 class="h3 mb-1 font-weight-bold">Buat Periode Baru</h1>
+      <p class="text-muted mb-0 small">Gunakan formulir ini untuk menambahkan periode survei yang lebih terstruktur — Seruti Q1–Q4 atau Susenas S1–S2, satu frame SLS.</p>
+    </div>
+    <a href="/periode" class="btn btn-outline-secondary shadow-sm mt-2 mt-md-0">
+      <i class="fas fa-arrow-left mr-1"></i>Kembali ke Daftar
+    </a>
+  </div>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-10 col-xl-8">
+
+    <?php if (!empty($errors)): ?>
+    <div class="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
+      <h5 class="alert-heading mb-1"><i class="fas fa-exclamation-triangle mr-1"></i>Periksa kembali isian Anda</h5>
+      <ul class="mb-0 small">
+        <?php foreach ($errors as $msg): ?><li><?= $e((string) $msg) ?></li><?php endforeach; ?>
+      </ul>
+      <button type="button" class="close" data-dismiss="alert" aria-label="Tutup"><span aria-hidden="true">&times;</span></button>
+    </div>
+    <?php endif; ?>
+
+    <form method="post" action="/periode" class="card ph-form-card shadow-sm" novalidate>
+      <?= $csrf ?>
+
+      <div class="card-header border-0 ph-card-header">
+        <h2 class="card-title font-weight-bold mb-0"><i class="fas fa-edit mr-2 text-muted"></i>Informasi Periode</h2>
+        <span class="badge badge-secondary">DRAFT &rarr; AKTIF &rarr; TUTUP</span>
+      </div>
+
+      <div class="card-body px-3 px-md-4">
+
+        <!-- Bagian 1: Identitas periode -->
+        <fieldset class="ph-fieldset">
+          <legend class="ph-legend">1. Identitas Periode <span class="text-muted small font-weight-normal">— wajib diisi</span></legend>
+
+          <div class="row">
+            <div class="col-12 col-md-6">
+              <div class="form-group ph-form-group <?= isset($errors['tahun']) ? 'has-error' : '' ?>">
+                <label for="fld-tahun" class="ph-label">Tahun <span class="text-danger" aria-hidden="true">*</span></label>
+                <div class="input-group">
+                  <div class="input-group-prepend"><span class="input-group-text" id="ic-tahun"><i class="fas fa-calendar"></i></span></div>
+                  <input name="tahun" id="fld-tahun" type="number" class="form-control" min="2020" max="2035"
+                         value="<?= $e((string) ($row['tahun'] ?? '2026')) ?>" required aria-required="true"
+                         aria-describedby="help-tahun<?= isset($errors['tahun']) ? ' err-tahun' : '' ?>">
+                </div>
+                <small id="help-tahun" class="form-text text-muted">Rentang tahun yang diizinkan: 2020–2035.</small>
+                <span id="err-tahun" class="ferr"><?= isset($errors['tahun']) ? $e((string) $errors['tahun']) : '' ?></span>
+              </div>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <div class="form-group ph-form-group <?= isset($errors['jenis']) ? 'has-error' : '' ?>">
+                <label for="fld-jenis" class="ph-label">Jenis Survei <span class="text-danger" aria-hidden="true">*</span></label>
+                <div class="input-group">
+                  <div class="input-group-prepend"><span class="input-group-text" id="ic-jenis"><i class="fas fa-tags"></i></span></div>
+                  <select name="jenis" id="fld-jenis" class="form-control" required aria-required="true"
+                          aria-describedby="help-jenis<?= isset($errors['jenis']) ? ' err-jenis' : '' ?>">
+                    <?php foreach ($jenisList as $code => $lbl): ?>
+                    <option value="<?= $e($code) ?>" <?= $jenisSelected === $code ? 'selected' : '' ?>><?= $e($lbl) ?></option>
+                    <?php endforeach; ?>
+                  </select>
+                </div>
+                <small id="help-jenis" class="form-text text-muted">Satu frame SLS dipakai bersama untuk Seruti dan Susenas.</small>
+                <span id="err-jenis" class="ferr"><?= isset($errors['jenis']) ? $e((string) $errors['jenis']) : '' ?></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group ph-form-group">
+            <label for="fld-label" class="ph-label">Label Periode</label>
+            <div class="input-group">
+              <div class="input-group-prepend"><span class="input-group-text" id="ic-label"><i class="fas fa-tag"></i></span></div>
+              <input name="label" id="fld-label" type="text" class="form-control" maxlength="100"
+                     placeholder="Contoh: 2026 S2 Susenas September"
+                     value="<?= $e((string) ($row['label'] ?? '')) ?>">
+            </div>
+            <small class="form-text text-muted">Opsional — jika dikosongkan, label dibuat otomatis dari tahun dan jenis survei.</small>
+          </div>
+        </fieldset>
+
+        <!-- Bagian 2: Rentang waktu -->
+        <fieldset class="ph-fieldset">
+          <legend class="ph-legend">2. Rentang Waktu Pelaksanaan <span class="text-muted small font-weight-normal">— opsional</span></legend>
+
+          <div class="row">
+            <div class="col-12 col-md-6">
+              <div class="form-group ph-form-group">
+                <label for="fld-mulai" class="ph-label">Tanggal Mulai</label>
+                <div class="input-group">
+                  <div class="input-group-prepend"><span class="input-group-text" id="ic-mulai"><i class="fas fa-play"></i></span></div>
+                  <input name="tgl_mulai" id="fld-mulai" type="date" class="form-control"
+                         value="<?= $e((string) ($row['tgl_mulai'] ?? '')) ?>">
+                </div>
+              </div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="form-group ph-form-group">
+                <label for="fld-selesai" class="ph-label">Tanggal Selesai</label>
+                <div class="input-group">
+                  <div class="input-group-prepend"><span class="input-group-text" id="ic-selesai"><i class="fas fa-flag-checkered"></i></span></div>
+                  <input name="tgl_selesai" id="fld-selesai" type="date" class="form-control"
+                         value="<?= $e((string) ($row['tgl_selesai'] ?? '')) ?>">
+                </div>
+              </div>
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- Bagian 3: Catatan -->
+        <fieldset class="ph-fieldset ph-fieldset-last">
+          <legend class="ph-legend">3. Catatan Tambahan <span class="text-muted small font-weight-normal">— opsional</span></legend>
+
+          <div class="form-group ph-form-group mb-1">
+            <label for="fld-catatan" class="ph-label">Catatan</label>
+            <textarea name="catatan" id="fld-catatan" class="form-control" rows="3" maxlength="500"
+                      placeholder="Misalnya: koordinasi dengan Kecamatan sebelum entri sampel"><?= $e((string) ($row['catatan'] ?? '')) ?></textarea>
+            <small class="form-text text-muted">Maksimal 500 karakter.</small>
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="card-footer ph-card-footer d-flex flex-column flex-sm-row justify-content-end px-3 px-md-4">
+        <a href="/periode" class="btn btn-outline-secondary mr-sm-2 mb-2 mb-sm-0">
+          <i class="fas fa-times mr-1"></i>Batal
+        </a>
+        <button type="submit" class="btn btn-success btn-lg shadow-sm ph-btn-submit">
+          <i class="fas fa-save mr-1"></i>Simpan Periode
+        </button>
+      </div>
+    </form>
+
+    <!-- Panel bantuan -->
+    <div class="alert alert-light border shadow-sm mt-4 ph-help-panel" role="note">
+      <h3 class="h6 font-weight-bold mb-2"><i class="fas fa-lightbulb text-warning mr-1"></i>Tahukah Anda?</h3>
+      <ul class="small text-muted mb-0 pl-3">
+        <li>Periode baru dibuat dengan status <span class="badge badge-secondary">DRAFT</span> dan dapat diaktifkan dari halaman detail.</li>
+        <li>Kombinasi tahun + jenis survei harus unik — sistem akan mencegah duplikasi.</li>
+        <li>Daftar sampel SLS dapat diimpor dari file Excel setelah periode tersimpan.</li>
+      </ul>
+    </div>
+
+  </div>
+</div>
 <?php require __DIR__ . '/../layouts/footer.phtml'; ?>

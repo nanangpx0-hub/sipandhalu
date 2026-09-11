@@ -1,10 +1,51 @@
-<?php $title = 'Login'; require __DIR__ . '/../layouts/header.phtml'; ?>
-<h1>Masuk SIPANDHALU</h1>
-<p class="muted">Sistem Informasi Pandhalungan Susenas–Seruti · Kab. Jember</p>
-<form method="post" action="/login" class="card">
-  <?= $csrf ?>
-  <label>Email<input type="email" name="email" required value="<?= \App\Core\View::e($old['email'] ?? '') ?>"></label>
-  <label>Password<input type="password" name="password" required></label>
-  <button type="submit">Masuk</button>
-</form>
-<?php require __DIR__ . '/../layouts/footer.phtml'; ?>
+<?php
+
+declare(strict_types=1);
+
+use App\Core\View;
+
+/** @var string $title */
+/** @var array $old */
+/** @var string|null $error */
+?>
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="x-ua-compatible" content="ie=edge">
+<title>Login — SIPANDHALU</title>
+<link rel="stylesheet" href="/assets/vendor/css/bootstrap.min.css">
+<link rel="stylesheet" href="/assets/vendor/css/fontawesome.all.min.css">
+<link rel="stylesheet" href="/assets/adminlte/css/adminlte.min.css">
+<link rel="stylesheet" href="/assets/css/app.css">
+</head>
+<body class="hold-transition login-page bg-indigo">
+<div class="login-box">
+  <div class="login-logo">
+    <a href="/"><b style="color:#fff">SIPA</b><span style="color:var(--emas)">NDHALU</span></a>
+  </div>
+  <div class="card">
+    <div class="card-body login-card-body">
+      <p class="login-box-msg">Sistem Informasi Pandhalungan Susenas–Seruti · Kab. Jember</p>
+      <?php if (!empty($error)): ?><div class="alert alert-danger py-2"><?= View::e((string) $error) ?></div><?php endif; ?>
+      <form method="post" action="/login">
+        <?= $csrf ?>
+        <div class="input-group mb-3">
+          <input type="email" class="form-control" name="email" placeholder="Email" required value="<?= View::e($old['email'] ?? '') ?>">
+          <div class="input-group-append"><div class="input-group-text"><span class="fas fa-envelope"></span></div></div>
+        </div>
+        <div class="input-group mb-3">
+          <input type="password" class="form-control" name="password" placeholder="Password" required>
+          <div class="input-group-append"><div class="input-group-text"><span class="fas fa-lock"></span></div></div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Masuk</button>
+      </form>
+    </div>
+  </div>
+</div>
+<script src="/assets/vendor/js/jquery.min.js"></script>
+<script src="/assets/vendor/js/bootstrap.bundle.min.js"></script>
+<script src="/assets/adminlte/js/adminlte.min.js"></script>
+</body>
+</html>

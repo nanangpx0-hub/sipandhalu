@@ -47,6 +47,32 @@ final class SlsRepository
         return ['data' => $stmt->fetchAll(), 'total' => $total];
     }
 
+    /** Semua baris untuk ekspor (dengan filter q/kec, tanpa LIMIT). */
+    public function exportAll(string $q, string $kec = 'all'): array
+    {
+        $w = [];
+        $p = [];
+        if ($q !== '') {
+            $w[] = '(s.nks LIKE :q1 OR s.kode_full LIKE :q2 OR s.nama_sls LIKE :q3 OR s.dusun LIKE :q4)';
+            $p[':q1'] = '%' . $q . '%';
+            $p[':q2'] = '%' . $q . '%';
+            $p[':q3'] = '%' . $q . '%';
+            $p[':q4'] = '%' . $q . '%';
+        }
+        if ($kec !== 'all') {
+            $w[] = 's.kec=:k';
+            $p[':k'] = $kec;
+        }
+        $where = $w === [] ? '' : 'WHERE ' . implode(' AND ', $w);
+        $stmt = $this->pdo->prepare(
+            "SELECT s.*, k.nama AS nama_kec, d.nama AS nama_desa FROM sls s
+             LEFT JOIN kecamatan k ON k.kode=s.kec LEFT JOIN desa d ON d.id=s.desa_id
+             {$where} ORDER BY s.kec, s.desa, s.nks"
+        );
+        $stmt->execute($p);
+        return $stmt->fetchAll();
+    }
+
     public function find(int $id): ?array
     {
         $stmt = $this->pdo->prepare('SELECT * FROM sls WHERE id=:id LIMIT 1');
