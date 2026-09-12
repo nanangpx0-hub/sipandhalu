@@ -3,27 +3,80 @@ $title = $mode === 'create' ? 'Tambah SLS' : 'Ubah SLS';
 require __DIR__ . '/../layouts/header.phtml';
 $action = $mode === 'create' ? '/sls' : '/sls/' . (int) $id;
 ?>
-<h1><?= \App\Core\View::e($title) ?></h1>
-<form method="post" action="<?= $action ?>" class="card">
-<?= $csrf ?>
-<label>Kode SLS 16 digit (cth 3509010001000100)<input name="kode_full" maxlength="16" value="<?= \App\Core\View::e($row['kode_full'] ?? '') ?>"></label>
-<?php if (!empty($errors['kode_full'])): ?><div class="ferr"><?= \App\Core\View::e($errors['kode_full']) ?></div><?php endif; ?>
-<p class="muted">Atau isi pecahan (kode dirakit otomatis 35+09+kec+desa+sls+sub):</p>
-<label>Kec (3)<input name="kec" maxlength="3" value="<?= \App\Core\View::e($row['kec'] ?? '') ?>"></label>
-<label>Desa (3)<input name="desa" maxlength="3" value="<?= \App\Core\View::e($row['desa'] ?? '') ?>"></label>
-<label>SLS (4, cth 0042)<input name="sls" maxlength="4" value="<?= \App\Core\View::e($row['sls'] ?? '') ?>"></label>
-<label>Sub (2, cth 00)<input name="sub" maxlength="2" value="<?= \App\Core\View::e($row['sub'] ?? '') ?>"></label>
-<label>NKS 5 digit*<input name="nks" required maxlength="5" value="<?= \App\Core\View::e($row['nks'] ?? '') ?>"></label>
-<?php if (!empty($errors['nks'])): ?><div class="ferr"><?= \App\Core\View::e($errors['nks']) ?></div><?php endif; ?>
-<label>Dusun<input name="dusun" value="<?= \App\Core\View::e($row['dusun'] ?? '') ?>"></label>
-<label>RW<input name="rw" value="<?= \App\Core\View::e($row['rw'] ?? '') ?>"></label>
-<label>RT<input name="rt" value="<?= \App\Core\View::e($row['rt'] ?? '') ?>"></label>
-<label>Nama SLS<input name="nama_sls" value="<?= \App\Core\View::e($row['nama_sls'] ?? '') ?>"></label>
-<label>Ketua<input name="ketua" value="<?= \App\Core\View::e($row['ketua'] ?? '') ?>"></label>
-<label>Klasifikasi<select name="klasifikasi"><option value="">—</option><option value="1" <?= (($row['klasifikasi']??'')==='1'||($row['klasifikasi']??'')===1)?'selected':'' ?>>1 Perkotaan</option><option value="2" <?= (($row['klasifikasi']??'')==='2'||($row['klasifikasi']??'')===2)?'selected':'' ?>>2 Perdesaan</option></select></label>
-<label>Jml KK<input name="jml_kk" type="number" value="<?= \App\Core\View::e((string)($row['jml_kk'] ?? '')) ?>"></label>
-<label>Jml RT<input name="jml_rt" type="number" value="<?= \App\Core\View::e((string)($row['jml_rt'] ?? '')) ?>"></label>
-<label><input type="checkbox" name="is_aktif" value="1" <?= ((int)($row['is_aktif']??1)===1)?'checked':'' ?>> Aktif</label>
-<button>Simpan</button> <a href="/sls">Batal</a>
-</form>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+  <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-map-marked-alt mr-2 text-primary"></i><?= \App\Core\View::e($title) ?></h1>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-header border-0">
+        <h5 class="card-title mb-0"><i class="fas fa-edit mr-1 text-muted"></i>Formulir Master SLS</h5>
+      </div>
+      <div class="card-body">
+        <form method="post" action="<?= \App\Core\View::e($action) ?>" novalidate>
+          <?= $csrf ?>
+
+          <div class="row">
+            <div class="form-group col-12 col-md-6">
+              <label for="fld-kode">Kode SLS 16 digit</label>
+              <input type="text" name="kode_full" id="fld-kode" class="form-control" maxlength="16" value="<?= \App\Core\View::e($row['kode_full'] ?? '') ?>">
+              <?php if (!empty($errors['kode_full'])): ?><small class="ferr"><?= \App\Core\View::e($errors['kode_full']) ?></small><?php endif; ?>
+              <small class="form-text text-muted">Contoh: 3509010001000100. Atau isi pecahan di bawah.</small>
+            </div>
+            <div class="form-group col-12 col-md-6">
+              <label for="fld-nks">NKS 5 digit <span class="text-danger">*</span></label>
+              <input type="text" name="nks" id="fld-nks" class="form-control" maxlength="5" required value="<?= \App\Core\View::e($row['nks'] ?? '') ?>">
+              <?php if (!empty($errors['nks'])): ?><small class="ferr"><?= \App\Core\View::e($errors['nks']) ?></small><?php endif; ?>
+            </div>
+          </div>
+
+          <fieldset class="border p-3 mb-3">
+            <legend class="font-weight-bold small text-muted">Rakit kode otomatis (kode dirakit dari kecamatan/desa/sls/sub)</legend>
+            <div class="row">
+              <div class="form-group col-6"><label for="fld-kec">Kecamatan (3)</label><input type="text" name="kec" id="fld-kec" class="form-control" maxlength="3" value="<?= \App\Core\View::e($row['kec'] ?? '') ?>"></div>
+              <div class="form-group col-6"><label for="fld-desa">Desa (3)</label><input type="text" name="desa" id="fld-desa" class="form-control" maxlength="3" value="<?= \App\Core\View::e($row['desa'] ?? '') ?>"></div>
+              <div class="form-group col-6"><label for="fld-sls">SLS (4)</label><input type="text" name="sls" id="fld-sls" class="form-control" maxlength="4" value="<?= \App\Core\View::e($row['sls'] ?? '') ?>"></div>
+              <div class="form-group col-6"><label for="fld-sub">Sub (2)</label><input type="text" name="sub" id="fld-sub" class="form-control" maxlength="2" value="<?= \App\Core\View::e($row['sub'] ?? '') ?>"></div>
+            </div>
+          </fieldset>
+
+          <div class="row">
+            <div class="form-group col-12 col-md-6"><label for="fld-nama">Nama SLS</label><input type="text" name="nama_sls" id="fld-nama" class="form-control" value="<?= \App\Core\View::e($row['nama_sls'] ?? '') ?>"></div>
+            <div class="form-group col-12 col-md-6"><label for="fld-ketua">Ketua</label><input type="text" name="ketua" id="fld-ketua" class="form-control" value="<?= \App\Core\View::e($row['ketua'] ?? '') ?>"></div>
+            <div class="form-group col-6"><label for="fld-dusun">Dusun</label><input type="text" name="dusun" id="fld-dusun" class="form-control" value="<?= \App\Core\View::e($row['dusun'] ?? '') ?>"></div>
+            <div class="form-group col-6"><label for="fld-rw">RW / RT</label>
+              <div class="input-group">
+                <input type="text" name="rw" id="fld-rw" class="form-control" style="width:50%" value="<?= \App\Core\View::e($row['rw'] ?? '') ?>">
+                <span class="input-group-text">/</span>
+                <input type="text" name="rt" id="fld-rt" class="form-control" style="width:50%" value="<?= \App\Core\View::e($row['rt'] ?? '') ?>">
+              </div>
+            </div>
+            <div class="form-group col-6"><label for="fld-klas">Klasifikasi</label>
+              <select name="klasifikasi" id="fld-klas" class="form-control">
+                <option value="">—</option>
+                <option value="1" <?= (($row['klasifikasi'] ?? '') === '1' || (int) ($row['klasifikasi'] ?? 0) === 1) ? 'selected' : '' ?>>1 Perkotaan</option>
+                <option value="2" <?= (($row['klasifikasi'] ?? '') === '2' || (int) ($row['klasifikasi'] ?? 0) === 2) ? 'selected' : '' ?>>2 Perdesaan</option>
+              </select>
+            </div>
+            <div class="form-group col-6"><label for="fld-kk">Jml KK</label><input type="number" name="jml_kk" id="fld-kk" class="form-control" value="<?= \App\Core\View::e((string)($row['jml_kk'] ?? '')) ?>"></div>
+            <div class="form-group col-6"><label for="fld-rt2">Jml RT</label><input type="number" name="jml_rt" id="fld-rt2" class="form-control" value="<?= \App\Core\View::e((string)($row['jml_rt'] ?? '')) ?>"></div>
+          </div>
+
+          <div class="form-group">
+            <div class="form-check">
+              <input type="checkbox" name="is_aktif" id="fld-aktif" class="form-check-input" value="1" <?= ((int) ($row['is_aktif'] ?? 1) === 1) ? 'checked' : '' ?>>
+              <label for="fld-aktif" class="form-check-label">SLS aktif</label>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary shadow-sm"><i class="fas fa-save mr-1"></i>Simpan</button>
+          <a href="/sls" class="btn btn-default">Batal</a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
 <?php require __DIR__ . '/../layouts/footer.phtml'; ?>

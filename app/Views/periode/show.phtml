@@ -2,41 +2,109 @@
 $title = 'Periode ' . ($row['label'] ?? '');
 require __DIR__ . '/../layouts/header.phtml';
 ?>
-<h1><?= \App\Core\View::e($row['label']) ?> <small><?= \App\Core\View::e($row['status']) ?></small></h1>
-<div class="grid">
-<div class="card"><h3>Ringkasan</h3>
-<p>SLS: <b><?= (int)($ringkas['n_sls']??0) ?></b> · Target: <b><?= (int)($ringkas['target']??0) ?></b> (28×10=280)<br>
-Muatan: <?= (int)($ringkas['muatan']??0) ?> · KK: <?= (int)($ringkas['kk']??0) ?> · RT: <?= (int)($ringkas['rt']??0) ?><br>
-Dok VSEN: <?= (int)($ringkas['dok']??0) ?> · Peta: <?= (int)($ringkas['peta']??0) ?></p>
-<form method="post" action="/periode/<?= (int)$row['id'] ?>/status"><?= $csrf ?>
-<select name="status"><option>DRAFT</option><option>AKTIF</option><option>TUTUP</option></select>
-<button>Ubah status</button> <small class="muted">DRAFT→AKTIF→TUTUP</small></form></div>
-<div class="card"><h3>Beban pengolah</h3>
-<table><tr><th>Pengolah</th><th>SLS</th><th>#</th></tr>
-<?php foreach ($beban as $b): ?><tr><td><?= \App\Core\View::e($b['pengolah']) ?></td><td><?= (int)$b['n_sls'] ?></td><td>#<?= (int)$b['peringkat'] ?></td></tr><?php endforeach; ?>
-<?php if ($beban===[]): ?><tr><td colspan="3" class="muted">Belum ada penugasan.</td></tr><?php endif; ?></table></div>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+  <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-calendar-alt mr-2 text-primary"></i><?= \App\Core\View::e($row['label']) ?> <small class="text-muted h6"><?= \App\Core\View::e($row['status']) ?></small></h1>
 </div>
-<h2>Sampel (level SLS)</h2>
-<form method="post" action="/periode/<?= (int)$row['id'] ?>/sampel" class="toolbar"><?= $csrf ?>
-<input name="nks" placeholder="tambah NKS, cth 56361" maxlength="5"><button>Tambah SLS</button>
-<?php if ($row['status'] !== 'TUTUP'): ?>
-<a class="btn btn-outline-success" href="/periode/<?= (int)$row['id'] ?>/template-sampel"><i class="fas fa-download mr-1"></i>Template</a>
-<button type="button" class="btn btn-outline-primary" data-toggle="modal" data-target="#modalImport"><i class="fas fa-upload mr-1"></i>Import sampel</button>
-<?php endif; ?>
+
+<div class="row">
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm mb-3">
+      <div class="card-header border-0">
+        <h5 class="card-title mb-0"><i class="fas fa-info-circle mr-1 text-muted"></i>Ringkasan</h5>
+      </div>
+      <div class="card-body">
+        <p>
+          <b>SLS:</b> <?= (int) ($ringkas['n_sls'] ?? 0) ?> <b>Target:</b> <?= (int) ($ringkas['target'] ?? 0) ?> (28×10=280 KK/RT)<br>
+          <b>Muatan:</b> <?= (int) ($ringkas['muatan'] ?? 0) ?> <b>KK:</b> <?= (int) ($ringkas['kk'] ?? 0) ?> <b>RT:</b> <?= (int) ($ringkas['rt'] ?? 0) ?><br>
+          <b>Dok VSEN:</b> <?= (int) ($ringkas['dok'] ?? 0) ?> <b>Peta:</b> <?= (int) ($ringkas['peta'] ?? 0) ?>
+        </p>
+        <form method="post" action="/periode/<?= (int) $row['id'] ?>/status">
+          <?= $csrf ?>
+          <div class="input-group mb-3" style="max-width:300px">
+            <select name="status" class="form-control">
+              <option value="DRAFT" <?= ($row['status'] === 'DRAFT') ? 'selected' : '' ?>>DRAFT</option>
+              <option value="AKTIF" <?= ($row['status'] === 'AKTIF') ? 'selected' : '' ?>>AKTIF</option>
+              <option value="TUTUP" <?= ($row['status'] === 'TUTUP') ? 'selected' : '' ?>>TUTUP</option>
+            </select>
+            <div class="input-group-append"><button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i>Ubah Status</button></div>
+          </div>
+        </form>
+      </div>
+      <div class="card-footer text-muted small">Alur status: DRAFT → AKTIF → TUTUP</div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm mb-3">
+      <div class="card-header border-0">
+        <h5 class="card-title mb-0"><i class="fas fa-users mr-1 text-muted"></i>Beban Pengolah</h5>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-striped table-hover table-valign-middle data-table">
+          <thead class="thead-light"><tr><th>Pengolah</th><th class="text-center">SLS</th><th class="text-center">#</th></tr></thead>
+          <tbody>
+          <?php foreach ($beban as $b): ?>
+            <tr>
+              <td><?= \App\Core\View::e($b['pengolah'] ?? '-') ?></td>
+              <td class="text-center"><?= (int) $b['n_sls'] ?></td>
+              <td class="text-center"><?= (int) $b['peringkat'] ?></td>
+            </tr>
+          <?php endforeach; ?>
+          <?php if ($beban === []): ?>
+            <tr><td colspan="3" class="text-center text-muted py-3">Belum ada penugasan.</td></tr>
+          <?php endif; ?>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2 class="h4 mt-4"><i class="fas fa-layer-group mr-2 text-muted"></i>Sampel</h2>
+
+<form method="post" action="/periode/<?= (int) $row['id'] ?>/sampel" class="input-group mb-3">
+  <?= $csrf ?>
+  <input type="text" name="nks" class="form-control" placeholder="Tambah NKS, contoh 56361" maxlength="5" required>
+  <div class="input-group-append"><button type="submit" class="btn btn-success"><i class="fas fa-plus mr-1"></i>Tambah SLS</button></div>
 </form>
-<?php $importUrl = '/periode/' . (int)$row['id'] . '/import-sampel'; $templateUrl = null; require __DIR__ . '/../layouts/import_excel.phtml'; ?>
-<table>
-<tr><th>NKS</th><th>SLS</th><th>Target</th><th>PCL / PML / Pengolah</th><th>Assign (id orang)</th></tr>
-<?php foreach ($sampel as $s): ?>
-<tr><td><b><?= \App\Core\View::e($s['nks']) ?></b></td>
-<td><small><?= \App\Core\View::e($s['nama_sls'] ?? '') ?><br><?= \App\Core\View::e($s['kec'].'/'.$s['desa']) ?></small></td>
-<td><?= (int)$s['target_sampel'] ?></td>
-<td><small><?= \App\Core\View::e($s['pcl']??'—') ?> / <?= \App\Core\View::e($s['pml']??'—') ?> / <?= \App\Core\View::e($s['pengolah']??'—') ?></small></td>
-<td><form method="post" action="/periode/<?= (int)$row['id'] ?>/assign"><?= $csrf ?>
-<input type="hidden" name="sampel_id" value="<?= (int)$s['id'] ?>">
-<input name="pcl_id" size="3" placeholder="pcl"> <input name="pml_id" size="3" placeholder="pml"> <input name="pengolah_id" size="3" placeholder="olah">
-<button class="link">simpan</button></form></td></tr>
-<?php endforeach; ?>
-</table>
-<p class="muted">Total <?= (int)$total ?> SLS di periode ini. Aturan K4: 1 orang 1 peran/periode.</p>
+<?php if ($row['status'] !== 'TUTUP'): ?>
+  <div class="btn-group mb-3">
+    <a class="btn btn-outline-success" href="/periode/<?= (int) $row['id'] ?>/template-sampel"><i class="fas fa-download mr-1"></i>Template</a>
+    <button type="button" class="btn btn-outline-primary" data-toggle="modal" data-target="#modalImport"><i class="fas fa-upload mr-1"></i>Import sampel</button>
+  </div>
+<?php endif; ?>
+
+<div class="card shadow-sm">
+  <div class="card-header border-0">
+    <h5 class="card-title mb-0"><i class="fas fa-list mr-1 text-muted"></i>Daftar Sampel</h5>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-striped table-hover table-valign-middle data-table">
+      <thead class="thead-light"><tr><th>NKS</th><th>SLS</th><th class="text-center">Target</th><th>PCL / PML / Pengolah</th><th class="text-center">Assign</th></tr></thead>
+      <tbody>
+      <?php foreach ($sampel as $s): ?>
+      <tr>
+        <td><b><?= \App\Core\View::e($s['nks']) ?></b></td>
+        <td><small><?= \App\Core\View::e($s['nama_sls'] ?? '') ?><br><?= \App\Core\View::e($s['kec'] . '/' . $s['desa']) ?></small></td>
+        <td class="text-center"><?= (int) $s['target_sampel'] ?></td>
+        <td><small><?= \App\Core\View::e($s['pcl'] ?? '—') ?> / <?= \App\Core\View::e($s['pml'] ?? '—') ?> / <?= \App\Core\View::e($s['pengolah'] ?? '—') ?></small></td>
+        <td class="text-center">
+          <form method="post" action="/periode/<?= (int) $row['id'] ?>/assign">
+            <?= $csrf ?>
+            <input type="hidden" name="sampel_id" value="<?= (int) $s['id'] ?>">
+            <input name="pcl_id" size="3" class="form-control form-control-sm d-inline" style="width:60px" placeholder="PCL">
+            <input name="pml_id" size="3" class="form-control form-control-sm d-inline" style="width:60px" placeholder="PML">
+            <input name="pengolah_id" size="3" class="form-control form-control-sm d-inline" style="width:60px" placeholder="Olah">
+            <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-save"></i></button>
+          </form>
+        </td>
+      </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer text-muted small">Total <?= (int) $total ?> SLS. Aturan K4: 1 orang 1 peran/periode.</div>
+</div>
+
 <?php require __DIR__ . '/../layouts/footer.phtml'; ?>

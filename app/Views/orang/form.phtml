@@ -3,18 +3,59 @@ $title = $mode === 'create' ? 'Tambah Petugas' : 'Ubah Petugas';
 require __DIR__ . '/../layouts/header.phtml';
 $action = $mode === 'create' ? '/petugas' : '/petugas/' . (int) $id;
 ?>
-<h1><?= \App\Core\View::e($title) ?></h1>
-<form method="post" action="<?= $action ?>" class="card">
-<?= $csrf ?>
-<label>Nama lengkap*<input name="nama" required maxlength="100" value="<?= \App\Core\View::e($row['nama'] ?? '') ?>"></label>
-<?php if (!empty($errors['nama'])): ?><div class="ferr"><?= \App\Core\View::e($errors['nama']) ?></div><?php endif; ?>
-<label>No HP<input name="no_hp" maxlength="20" value="<?= \App\Core\View::e($row['no_hp'] ?? '') ?>"></label>
-<?php if (!empty($errors['no_hp'])): ?><div class="ferr"><?= \App\Core\View::e($errors['no_hp']) ?></div><?php endif; ?>
-<label>Email<input name="email" type="email" maxlength="190" value="<?= \App\Core\View::e($row['email'] ?? '') ?>"></label>
-<?php if (!empty($errors['email'])): ?><div class="ferr"><?= \App\Core\View::e($errors['email']) ?></div><?php endif; ?>
-<label>Alamat<input name="alamat" maxlength="255" value="<?= \App\Core\View::e($row['alamat'] ?? '') ?>"></label>
-<label><input type="checkbox" name="is_aktif" value="1" <?= ((int) ($row['is_aktif'] ?? 1) === 1) ? 'checked' : '' ?>> Aktif</label>
-<button>Simpan</button> <a href="/petugas">Batal</a>
-</form>
-<p class="muted">Nama disimpan Title Case + TRIM. Varian tulisan (misal Junaidi / Junaidi Ari Siswanto) dikelola di menu Alias pada detail petugas.</p>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+  <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-user mr-2 text-primary"></i><?= \App\Core\View::e($title) ?></h1>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-header border-0">
+        <h5 class="card-title mb-0"><i class="fas fa-edit mr-1 text-muted"></i>Formulir Petugas</h5>
+      </div>
+      <div class="card-body">
+        <form method="post" action="<?= \App\Core\View::e($action) ?>" novalidate>
+          <?= $csrf ?>
+
+          <div class="form-group">
+            <label for="fld-nama">Nama Lengkap <span class="text-danger">*</span></label>
+            <input type="text" name="nama" id="fld-nama" class="form-control" maxlength="100" required value="<?= \App\Core\View::e($row['nama'] ?? '') ?>">
+            <?php if (!empty($errors['nama'])): ?><small class="ferr"><?= \App\Core\View::e($errors['nama']) ?></small><?php endif; ?>
+            <small class="form-text text-muted">Disimpan dalam huruf Title Case + TRIM.</small>
+          </div>
+
+          <div class="row">
+            <div class="form-group col-12 col-md-6">
+              <label for="fld-hp">No HP</label>
+              <input type="text" name="no_hp" id="fld-hp" class="form-control" maxlength="20" value="<?= \App\Core\View::e($row['no_hp'] ?? '') ?>">
+              <?php if (!empty($errors['no_hp'])): ?><small class="ferr"><?= \App\Core\View::e($errors['no_hp']) ?></small><?php endif; ?>
+            </div>
+            <div class="form-group col-12 col-md-6">
+              <label for="fld-email">Email</label>
+              <input type="email" name="email" id="fld-email" class="form-control" maxlength="190" value="<?= \App\Core\View::e($row['email'] ?? '') ?>">
+              <?php if (!empty($errors['email'])): ?><small class="ferr"><?= \App\Core\View::e($errors['email']) ?></small><?php endif; ?>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="fld-alamat">Alamat</label>
+            <input type="text" name="alamat" id="fld-alamat" class="form-control" maxlength="255" value="<?= \App\Core\View::e($row['alamat'] ?? '') ?>">
+          </div>
+
+          <div class="form-group">
+            <div class="form-check">
+              <input type="checkbox" name="is_aktif" id="fld-aktif" class="form-check-input" value="1" <?= ((int) ($row['is_aktif'] ?? 1) === 1) ? 'checked' : '' ?>>
+              <label for="fld-aktif" class="form-check-label">Petugas aktif</label>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary shadow-sm"><i class="fas fa-save mr-1"></i>Simpan</button>
+          <a href="/petugas" class="btn btn-default">Batal</a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
 <?php require __DIR__ . '/../layouts/footer.phtml'; ?>

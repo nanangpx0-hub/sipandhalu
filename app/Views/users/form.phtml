@@ -3,18 +3,73 @@ $title = $mode === 'create' ? 'Tambah User' : 'Ubah User';
 require __DIR__ . '/../layouts/header.phtml';
 $action = $mode === 'create' ? '/users' : '/users/' . (int) $id;
 ?>
-<h1><?= \App\Core\View::e($title) ?></h1>
-<form method="post" action="<?= $action ?>" class="card">
-<?= $csrf ?>
-<label>Nama*<input name="nama" required value="<?= \App\Core\View::e($row['nama'] ?? '') ?>"></label>
-<?php if (!empty($errors['nama'])): ?><div class="ferr"><?= \App\Core\View::e($errors['nama']) ?></div><?php endif; ?>
-<label>Email*<input name="email" type="email" required value="<?= \App\Core\View::e($row['email'] ?? '') ?>"></label>
-<?php if (!empty($errors['email'])): ?><div class="ferr"><?= \App\Core\View::e($errors['email']) ?></div><?php endif; ?>
-<label>Password <?= $mode === 'create' ? '*' : '(kosongkan jika tidak ganti)' ?><input name="password" type="password" <?= $mode === 'create' ? 'required minlength="8"' : 'minlength="8"' ?>></label>
-<?php if (!empty($errors['password'])): ?><div class="ferr"><?= \App\Core\View::e($errors['password']) ?></div><?php endif; ?>
-<label>Peran*<select name="role_id" required><?php foreach ($roles as $ro): ?><option value="<?= (int) $ro['id'] ?>" <?= ((string) ($row['role_id'] ?? '') === (string) $ro['id']) ? 'selected' : '' ?>><?= \App\Core\View::e($ro['label']) ?> (<?= \App\Core\View::e($ro['code']) ?>)</option><?php endforeach; ?></select></label>
-<label>Link ke petugas (pool orang)<select name="orang_id"><option value="">— tanpa link —</option><?php foreach ($orangOptions as $o): ?><option value="<?= (int) $o['id'] ?>" <?= ((string) ($row['orang_id'] ?? '') === (string) $o['id']) ? 'selected' : '' ?>><?= \App\Core\View::e($o['nama']) ?></option><?php endforeach; ?></select></label>
-<label><input type="checkbox" name="is_aktif" value="1" <?= ((int) ($row['is_aktif'] ?? 1) === 1) ? 'checked' : '' ?>> Aktif</label>
-<button>Simpan</button> <a href="/users">Batal</a>
-</form>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+  <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-user-shield mr-2 text-primary"></i><?= \App\Core\View::e($title) ?></h1>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-header border-0">
+        <h5 class="card-title mb-0"><i class="fas fa-edit mr-1 text-muted"></i>Formulir Akun Login</h5>
+      </div>
+      <div class="card-body">
+        <form method="post" action="<?= \App\Core\View::e($action) ?>" novalidate>
+          <?= $csrf ?>
+
+          <div class="form-group">
+            <label for="fld-nama">Nama <span class="text-danger">*</span></label>
+            <input type="text" name="nama" id="fld-nama" class="form-control" required value="<?= \App\Core\View::e($row['nama'] ?? '') ?>">
+            <?php if (!empty($errors['nama'])): ?><small class="ferr"><?= \App\Core\View::e($errors['nama']) ?></small><?php endif; ?>
+          </div>
+
+          <div class="row">
+            <div class="form-group col-12 col-md-6">
+              <label for="fld-email">Email <span class="text-danger">*</span></label>
+              <input type="email" name="email" id="fld-email" class="form-control" required value="<?= \App\Core\View::e($row['email'] ?? '') ?>">
+              <?php if (!empty($errors['email'])): ?><small class="ferr"><?= \App\Core\View::e($errors['email']) ?></small><?php endif; ?>
+            </div>
+            <div class="form-group col-12 col-md-6">
+              <label for="fld-password"><?= $mode === 'create' ? 'Password <span class="text-danger">*</span>' : 'Password <small class="text-muted">(kosongkan jika tidak ganti)</small>' ?></label>
+              <input type="password" name="password" id="fld-password" class="form-control" <?= $mode === 'create' ? 'required minlength="8"' : 'minlength="8"' ?>>
+              <?php if (!empty($errors['password'])): ?><small class="ferr"><?= \App\Core\View::e($errors['password']) ?></small><?php endif; ?>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="form-group col-12 col-md-6">
+              <label for="fld-role">Peran <span class="text-danger">*</span></label>
+              <select name="role_id" id="fld-role" class="form-control" required>
+                <?php foreach ($roles as $ro): ?>
+                <option value="<?= (int) $ro['id'] ?>" <?= ((string) ($row['role_id'] ?? '') === (string) $ro['id']) ? 'selected' : '' ?>><?= \App\Core\View::e($ro['label']) ?> (<?= \App\Core\View::e($ro['code']) ?>)</option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="form-group col-12 col-md-6">
+              <label for="fld-orang">Link ke petugas</label>
+              <select name="orang_id" id="fld-orang" class="form-control">
+                <option value="">— tanpa link —</option>
+                <?php foreach ($orangOptions as $o): ?>
+                <option value="<?= (int) $o['id'] ?>" <?= ((string) ($row['orang_id'] ?? '') === (string) $o['id']) ? 'selected' : '' ?>><?= \App\Core\View::e($o['nama']) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="form-check">
+              <input type="checkbox" name="is_aktif" id="fld-aktif" class="form-check-input" value="1" <?= ((int) ($row['is_aktif'] ?? 1) === 1) ? 'checked' : '' ?>>
+              <label for="fld-aktif" class="form-check-label">Akun aktif</label>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary shadow-sm"><i class="fas fa-save mr-1"></i>Simpan</button>
+          <a href="/users" class="btn btn-default">Batal</a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
 <?php require __DIR__ . '/../layouts/footer.phtml'; ?>
