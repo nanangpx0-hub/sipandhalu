@@ -4,7 +4,15 @@
 !/storage/.gitkeep
 *.log
 .phpunit.result.cache
+.cache
 # Data BPS sensitif (RAHASIA, PII) - jangan pernah di-commit
 /data/
+# IDE/OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
 ~$*
 
