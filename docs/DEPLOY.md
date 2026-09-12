@@ -72,11 +72,19 @@ Pastikan `.env` tidak di-commit ke Git.
 
 ## 4. Jalankan aplikasi
 
-```bash
-php -S localhost:8091 -t public
-```
+Buka **http://sipandhalu.test**.
 
-Buka `http://localhost:8091`.
+> Jika `http://sipandhalu.test` belum bisa dibuka, tambahkan baris berikut ke file `C:\Windows\System32\drivers\etc\hosts` (dibuka sebagai Administrator):
+>
+> ```text
+> 127.0.0.1 sipandhalu.test
+> ```
+>
+> Atau jalankan aplikasi sementara melalui:
+>
+> ```bash
+> php -S localhost:8091 -t public
+> ```
 
 ## Login Demo
 

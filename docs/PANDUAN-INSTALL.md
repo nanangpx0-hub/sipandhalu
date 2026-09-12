@@ -129,7 +129,7 @@ DB_USER=root
 DB_PASS=
 APP_ENV=local
 APP_DEBUG=true
-APP_URL=http://localhost:8091
+APP_URL=http://sipandhalu.test
 ```
 
 **Jangan commit `.env` ke Git.** File `.env` sudah ada di `.gitignore`.
@@ -143,13 +143,27 @@ Variabel penting:
 | `APP_URL` | URL publik aplikasi. |
 | `SESSION_SECURE` | `true` jika menggunakan HTTPS. |
 
-### 4.4 Jalankan aplikasi
+### 4.4 Jalankan aplikasi melalui Apache
+
+Pastikan VirtualHost `sipandhalu.test` mengarah ke `<proyek>/public` (lihat `C:/laragon/etc/apache2/sites-enabled/sipandhalu.test.conf`), lalu restart Apache:
 
 ```bash
-php -S localhost:8091 -t public
+C:\laragon\bin\apache\httpd-2.4.54-win64-VS16\bin\httpd.exe -k restart
 ```
 
-Buka `http://localhost:8091`.
+Buka **http://sipandhalu.test**.
+
+> Jika Apache belum dijalankan sebagai service, jalankan langsung:
+>
+> ```bash
+> C:\laragon\bin\apache\httpd-2.4.54-win64-VS16\bin\httpd.exe
+> ```
+>
+> Atau jalankan server PHP sementara:
+>
+> ```bash
+> php -S localhost:8091 -t public
+> ```
 
 ---
 
