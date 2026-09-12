@@ -12,7 +12,9 @@ use App\Core\Session;
 use App\Repositories\AuditRepository;
 use App\Repositories\PeriodeRepository;
 use App\Repositories\SampelRepository;
+use App\Repositories\DokumenRepository;
 use App\Repositories\SlsRepository;
+use App\Services\DokumenService;
 use App\Services\PenugasanService;
 
 final class PeriodeController
@@ -20,6 +22,8 @@ final class PeriodeController
     private PeriodeRepository $per;
     private SampelRepository $sampel;
     private SlsRepository $sls;
+    private DokumenRepository $dokumenRepo;
+    private DokumenService $dokumenSvc;
 
     public function __construct()
     {
@@ -27,6 +31,8 @@ final class PeriodeController
         $this->per = new PeriodeRepository($pdo);
         $this->sampel = new SampelRepository($pdo);
         $this->sls = new SlsRepository($pdo);
+        $this->dokumenRepo = new DokumenRepository($pdo);
+        $this->dokumenSvc = new DokumenService($pdo, $this->sampel, $this->dokumenRepo, new AuditRepository($pdo));
     }
 
     private function actor(): ?int
@@ -118,11 +124,33 @@ final class PeriodeController
         $q = (string) ($req->get['q'] ?? '');
         $page = max(1, (int) ($req->get['page'] ?? 1));
         $res = $this->sampel->paginateByPeriode($id, $q, $page, 15);
+        // Opsi petugas aktif untuk dropdown penugasan (hindari input ID manual).
+        $pdo = Database::connection();
+        $stmt = $pdo->prepare('SELECT id, nama FROM orang WHERE is_aktif=1 ORDER BY nama LIMIT 2000');
+        $stmt->execute();
+        $petugasOptions = $stmt->fetchAll();
+        // Peta peran per orang di periode ini untuk indikator K4 instan.
+        $stmt = $pdo->prepare(
+            'SELECT pg.pcl_id AS oid, "PCL" AS peran FROM penugasan pg JOIN sampel sp ON sp.id=pg.sampel_id WHERE sp.periode_id=:p1 AND pg.pcl_id IS NOT NULL
+             UNION ALL
+             SELECT pg.pml_id, "PML" FROM penugasan pg JOIN sampel sp ON sp.id=pg.sampel_id WHERE sp.periode_id=:p2 AND pg.pml_id IS NOT NULL
+             UNION ALL
+             SELECT pg.pengolah_id, "PENGOLAH" FROM penugasan pg JOIN sampel sp ON sp.id=pg.sampel_id WHERE sp.periode_id=:p3 AND pg.pengolah_id IS NOT NULL'
+        );
+        $stmt->execute([':p1' => $id, ':p2' => $id, ':p3' => $id]);
+        $peranMap = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $oid = (int) $r['oid'];
+            $peranMap[$oid][] = $r['peran'];
+            $peranMap[$oid] = array_values(array_unique($peranMap[$oid]));
+        }
         Response::view('periode/show.phtml', [
             'row' => $row, 'ringkas' => $this->per->ringkasan($id),
             'beban' => $this->per->bebanPengolah($id),
             'sampel' => $res['data'], 'total' => $res['total'],
             'q' => $q, 'page' => $page, 'perPage' => 15,
+            'petugasOptions' => $petugasOptions, 'peranMap' => $peranMap,
+            'pmlList' => $this->sampel->allPmlInPeriode($id),
             'success' => Session::flash('success'), 'error' => Session::flash('error'),
             'import_errors' => Session::flash('import_errors') ?? [],
             'csrf' => \App\Core\Csrf::field(),
@@ -278,5 +306,143 @@ final class PeriodeController
         );
         Session::flash($res['ok'] ? 'success' : 'error', $res['ok'] ? 'Penugasan disimpan.' : implode(' ', $res['errors']));
         Response::redirect('/periode/' . $id);
+    }
+
+    public function terimaDokumen(Request $req, array $params = []): void
+    {
+        $id = (int) ($params['id'] ?? 0);
+        $sid = (int) ($params['sid'] ?? 0);
+        $operatorId = $this->actor() ?? 0;
+        try {
+            $this->dokumenSvc->terimaSatuan(
+                $sid,
+                $req->post,
+                $operatorId,
+                $req->ip(),
+                $req->userAgent()
+            );
+            Session::flash('success', 'Penerimaan dokumen berhasil dicatat.');
+        } catch (\Throwable $t) {
+            Session::flash('error', $t->getMessage());
+        }
+        Response::redirect('/periode/' . $id);
+    }
+
+    public function ajaxPmlSampel(Request $req, array $params = []): void
+    {
+        $id = (int) ($params['id'] ?? 0);
+        $pmlId = (int) ($params['pmlId'] ?? 0);
+        $rows = $this->sampel->findByPmlInPeriode($id, $pmlId);
+        Response::json(['data' => $rows]);
+    }
+
+    public function terimaKolektif(Request $req, array $params = []): void
+    {
+        $id = (int) ($params['id'] ?? 0);
+        $pmlId = (int) ($req->post['pml_id'] ?? 0);
+        $waktuTerima = trim((string) ($req->post['waktu_terima'] ?? '')) ?: date('Y-m-d H:i:s');
+        $catatan = trim((string) ($req->post['catatan'] ?? ''));
+        $rawItems = $req->post['items'] ?? [];
+        $items = [];
+        if (is_array($rawItems)) {
+            foreach ($rawItems as $sid => $val) {
+                if (!empty($val['pilih'])) {
+                    $items[] = [
+                        'sampel_id' => (int) $sid,
+                        'pemutakhiran' => !empty($val['pemutakhiran']),
+                        'peta' => !empty($val['peta']),
+                        'hasil_kk' => isset($val['hasil_kk']) && $val['hasil_kk'] !== '' ? (int) $val['hasil_kk'] : null,
+                        'hasil_rt' => isset($val['hasil_rt']) && $val['hasil_rt'] !== '' ? (int) $val['hasil_rt'] : null,
+                    ];
+                }
+            }
+        }
+        $operatorId = $this->actor() ?? 0;
+        try {
+            if (empty($items)) {
+                throw new \InvalidArgumentException('Tidak ada sampel yang dipilih untuk diterima.');
+            }
+            $count = $this->dokumenSvc->terimaKolektif(
+                $id,
+                $pmlId,
+                $items,
+                $waktuTerima,
+                $catatan,
+                $operatorId,
+                $req->ip(),
+                $req->userAgent()
+            );
+            Session::flash('success', "Penerimaan kolektif berhasil ({$count} sampel diperbarui).");
+        } catch (\Throwable $t) {
+            Session::flash('error', $t->getMessage());
+        }
+        Response::redirect('/periode/' . $id);
+    }
+
+    public function pinjamDokumen(Request $req, array $params = []): void
+    {
+        $id = (int) ($params['id'] ?? 0);
+        $sid = (int) ($params['sid'] ?? 0);
+        $jenisDok = trim((string) ($req->post['jenis_dok'] ?? 'SEMUA'));
+        $peminjamId = (int) ($req->post['peminjam_id'] ?? 0);
+        $peminjamPeran = trim((string) ($req->post['peminjam_peran'] ?? 'PML'));
+        $waktuPinjam = trim((string) ($req->post['waktu_pinjam'] ?? '')) ?: date('Y-m-d H:i:s');
+        $alasan = trim((string) ($req->post['alasan'] ?? ''));
+        $operatorId = $this->actor() ?? 0;
+
+        try {
+            $this->dokumenSvc->pinjamDokumen(
+                $sid,
+                $jenisDok,
+                $peminjamId,
+                $peminjamPeran,
+                $waktuPinjam,
+                $alasan,
+                $operatorId,
+                $req->ip(),
+                $req->userAgent()
+            );
+            Session::flash('success', 'Peminjaman dokumen berhasil dicatat.');
+        } catch (\Throwable $t) {
+            Session::flash('error', $t->getMessage());
+        }
+        Response::redirect('/periode/' . $id);
+    }
+
+    public function kembaliDokumen(Request $req, array $params = []): void
+    {
+        $id = (int) ($params['id'] ?? 0);
+        $pinjamId = (int) ($req->post['pinjam_id'] ?? 0);
+        $waktuKembali = trim((string) ($req->post['waktu_kembali'] ?? '')) ?: date('Y-m-d H:i:s');
+        $catatan = trim((string) ($req->post['catatan_kembali'] ?? ''));
+        $operatorId = $this->actor() ?? 0;
+
+        try {
+            $this->dokumenSvc->kembalikanDokumen(
+                $pinjamId,
+                $waktuKembali,
+                $catatan,
+                $operatorId,
+                $req->ip(),
+                $req->userAgent()
+            );
+            Session::flash('success', 'Pengembalian dokumen berhasil dicatat (status kembali DITERIMA).');
+        } catch (\Throwable $t) {
+            Session::flash('error', $t->getMessage());
+        }
+        Response::redirect('/periode/' . $id);
+    }
+
+    public function riwayatDokumen(Request $req, array $params = []): void
+    {
+        $sid = (int) ($params['sid'] ?? 0);
+        $sampel = $this->sampel->find($sid);
+        $riwayat = $this->dokumenRepo->riwayatBySampel($sid);
+        $activePinjam = $this->dokumenRepo->activePinjamBySampel($sid);
+        Response::json([
+            'sampel' => $sampel,
+            'riwayat' => $riwayat,
+            'activePinjam' => $activePinjam,
+        ]);
     }
 }

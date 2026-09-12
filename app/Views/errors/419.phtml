@@ -1,3 +1,11 @@
-<?php $title = 'Sesi kedaluwarsa'; http_response_code(419); require __DIR__ . '/../layouts/header.phtml'; ?>
-<h1>419 — Sesi kedaluwarsa (CSRF)</h1><p>Muat ulang halaman lalu coba lagi.</p><p><a href="/">Kembali</a></p>
+<?php $title = 'Sesi Kedaluwarsa'; http_response_code(419); require __DIR__ . '/../layouts/header.phtml'; ?>
+<div class="error-page my-5">
+  <h2 class="headline text-warning">419</h2>
+  <div class="error-content">
+    <h3><i class="fas fa-clock text-warning"></i> Sesi kedaluwarsa (CSRF).</h3>
+    <p class="text-muted">Token keamanan Anda habis. Muat ulang halaman lalu coba lagi.</p>
+    <a href="/" class="btn btn-primary shadow-sm"><i class="fas fa-home mr-1"></i>Kembali ke Dasbor</a>
+  </div>
+</div>
 <?php require __DIR__ . '/../layouts/footer.phtml'; ?>
+

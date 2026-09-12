@@ -1,0 +1,38 @@
+<?php
+/**
+ * Partial paginasi server-side reusable.
+ *
+ * Variabel input:
+ * @var int $page        halaman aktif (1-based)
+ * @var int $total       total baris
+ * @var int $perPage     baris per halaman
+ * @var array $queryParams  parameter GET yang dipertahankan (mis. ['q'=>$q,'status'=>$status])
+ */
+$pages = (int) ceil($total / max(1, $perPage));
+if ($pages <= 1) {
+    return;
+}
+$queryParams = $queryParams ?? [];
+$buildUrl = static function (int $p) use ($queryParams): string {
+    $q = array_merge($queryParams, ['page' => $p]);
+    return '?' . http_build_query($q);
+};
+?>
+<div class="d-flex justify-content-between align-items-center flex-wrap px-3 py-2 border-top bg-light">
+  <div class="small text-muted mb-2 mb-md-0">
+    Halaman <b><?= (int) $page ?></b> dari <b><?= (int) $pages ?></b> (Total <?= (int) $total ?> data)
+  </div>
+  <ul class="pagination pagination-sm m-0">
+    <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+      <a class="page-link" href="<?= $page > 1 ? \App\Core\View::e($buildUrl($page - 1)) : '#' ?>" aria-label="Sebelumnya">&laquo;</a>
+    </li>
+    <?php for ($i = max(1, $page - 2); $i <= min($pages, $page + 2); $i++): ?>
+      <li class="page-item <?= $i === $page ? 'active' : '' ?>">
+        <a class="page-link" href="<?= \App\Core\View::e($buildUrl($i)) ?>"><?= (int) $i ?></a>
+      </li>
+    <?php endfor; ?>
+    <li class="page-item <?= $page >= $pages ? 'disabled' : '' ?>">
+      <a class="page-link" href="<?= $page < $pages ? \App\Core\View::e($buildUrl($page + 1)) : '#' ?>" aria-label="Berikutnya">&raquo;</a>
+    </li>
+  </ul>
+</div>

@@ -66,4 +66,12 @@ $router->post('/periode/{id}/status', PeriodeController::class, 'setStatus', [Au
 $router->post('/periode/{id}/sampel', PeriodeController::class, 'addSampel', [AuthMiddleware::class, CsrfMiddleware::class]);
 $router->post('/periode/{id}/assign', PeriodeController::class, 'assign', [AuthMiddleware::class, CsrfMiddleware::class]);
 
+// Penerimaan & Peminjaman Dokumen Lapangan
+$router->post('/periode/{id}/sampel/{sid}/terima', PeriodeController::class, 'terimaDokumen', [AuthMiddleware::class, CsrfMiddleware::class]);
+$router->get('/periode/{id}/pml/{pmlId}/sampel', PeriodeController::class, 'ajaxPmlSampel', [AuthMiddleware::class]);
+$router->post('/periode/{id}/terima-kolektif', PeriodeController::class, 'terimaKolektif', [AuthMiddleware::class, CsrfMiddleware::class]);
+$router->post('/periode/{id}/sampel/{sid}/pinjam', PeriodeController::class, 'pinjamDokumen', [AuthMiddleware::class, CsrfMiddleware::class]);
+$router->post('/periode/{id}/kembali-dokumen', PeriodeController::class, 'kembaliDokumen', [AuthMiddleware::class, CsrfMiddleware::class]);
+$router->get('/periode/{id}/sampel/{sid}/riwayat-dokumen', PeriodeController::class, 'riwayatDokumen', [AuthMiddleware::class]);
+
 return $router;

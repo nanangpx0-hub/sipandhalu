@@ -18,15 +18,32 @@
 <script src="/assets/vendor/js/dataTables.bootstrap4.min.js"></script>
 <script>
 $(function () {
-  // Aktifkan DataTables pada semua tabel berclass .data-table
+  // Kamus Bahasa Indonesia lokal — 100% offline, tanpa CDN (kebutuhan intranet BPS).
+  var idLanguage = {
+    emptyTable: "Tidak ada data yang tersedia",
+    info: "Menampilkan _START_ sampai _END_ dari _TOTAL_ entri",
+    infoEmpty: "Menampilkan 0 sampai 0 dari 0 entri",
+    infoFiltered: "(difilter dari _MAX_ total entri)",
+    lengthMenu: "Tampilkan _MENU_ entri",
+    loadingRecords: "Memuat...",
+    processing: "Sedang memproses...",
+    search: "Cari:",
+    zeroRecords: "Tidak ditemukan data yang sesuai",
+    paginate: { first: "Pertama", last: "Terakhir", next: "Berikutnya", previous: "Sebelumnya" }
+  };
+
   if ($.fn.DataTable) {
+    // Mode server-side pagination: matikan paging/search/info client
+    // agar tidak menutupi kontrol halaman dari server.
+    $('.data-table-server').each(function () {
+      if (!$.fn.DataTable.isDataTable(this)) {
+        $(this).DataTable({ order: [], paging: false, info: false, searching: false, language: idLanguage });
+      }
+    });
+    // Mode client-side penuh: seluruh baris sudah dimuat di browser.
     $('.data-table').each(function () {
-      var $t = $(this);
-      if (!$.fn.DataTable.isDataTable($t)) {
-        $t.DataTable({
-          order: [],
-          language: { url: 'https://cdn.datatables.net/plug-ins/1.13.8/i18n/id.json' }
-        });
+      if (!$.fn.DataTable.isDataTable(this)) {
+        $(this).DataTable({ order: [], language: idLanguage });
       }
     });
   }
