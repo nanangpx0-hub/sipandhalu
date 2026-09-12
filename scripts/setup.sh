@@ -7,6 +7,11 @@ PROJECT_ROOT="$(pwd)"
 DB_ROOT_USER="${DB_ROOT_USER:-root}"
 DB_ROOT_PASS="${DB_ROOT_PASS:-}"
 
+if [ ! -f .env ]; then
+  cp .env.example .env
+  echo ".env dibuat dari .env.example"
+fi
+
 echo "== Install dependensi Composer =="
 composer install --no-interaction --optimize-autoloader
 

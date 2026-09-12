@@ -6,6 +6,11 @@ cd /d "%~dp0\.."
 if "%DB_ROOT_USER%"=="" set DB_ROOT_USER=root
 if "%DB_ROOT_PASS%"=="" set DB_ROOT_PASS=
 
+if not exist .env (
+  copy .env.example .env
+  echo .env dibuat dari .env.example
+)
+
 echo == Install dependensi Composer ==
 composer install --no-interaction --optimize-autoloader
 
