@@ -109,6 +109,12 @@ require __DIR__ . '/../layouts/header.phtml';
       <a class="btn btn-outline-success shadow-sm mr-1" href="/periode/<?= (int) $row['id'] ?>/template-sampel"><i class="fas fa-download mr-1"></i>Template</a>
       <button type="button" class="btn btn-outline-primary shadow-sm" data-toggle="modal" data-target="#modalImport"><i class="fas fa-upload mr-1"></i>Import</button>
     <?php endif; ?>
+    <button type="button" class="btn btn-warning text-dark shadow-sm mr-1" data-toggle="modal" data-target="#modalImportDokKirim">
+      <i class="fas fa-file-upload mr-1"></i>Import Dok Kirim Kab
+    </button>
+    <a class="btn btn-success shadow-sm" href="/periode/<?= (int) $row['id'] ?>/dok-kirim/export">
+      <i class="fas fa-file-export mr-1"></i>Export Dok Kirim Kab
+    </a>
   </div>
 </div>
 
@@ -160,6 +166,7 @@ $opt = static function (?string $current, string $peran) use ($petugasOptions, $
           <th>Penugasan</th>
           <th>Fisik Dokumen</th>
           <th>Hasil Blok II</th>
+          <th class="text-center" style="min-width:160px">Kuesioner Ruta (Progress)</th>
           <th class="text-center" style="min-width:140px">Aksi Berkas</th>
           <th class="text-center" style="min-width:280px">Penugasan K4</th>
         </tr>
@@ -222,6 +229,24 @@ $opt = static function (?string $current, string $peran) use ($petugasOptions, $
           <small class="d-block">RT: <b><?= $s['hasil_rt'] !== null ? (int) $s['hasil_rt'] : '—' ?></b></small>
         </td>
         <td class="text-center">
+          <?php
+            $rs = $rutaSummary[$sid] ?? ['selesai' => 0, 'modul' => 0, 'kp' => 0];
+            $nSelesai = (int) $rs['selesai'];
+            $pct = (int) round($nSelesai / 10 * 100);
+            $badgeCls = $nSelesai >= 10 ? 'badge-success' : ($nSelesai > 0 ? 'badge-warning text-dark' : 'badge-secondary');
+          ?>
+          <span class="badge <?= $badgeCls ?> font-weight-bold mb-1" data-toggle="tooltip" title="Modul terisi: <?= $nSelesai ?> · KP terisi: <?= (int) $rs['kp'] ?>">
+            <?= $nSelesai ?>/10
+          </span>
+          <div class="progress mb-1" style="height:6px">
+            <div class="progress-bar <?= $nSelesai >= 10 ? 'bg-success' : ($nSelesai > 0 ? 'bg-warning' : 'bg-secondary') ?>" style="width:<?= $pct ?>%"></div>
+          </div>
+          <button type="button" class="btn btn-xs btn-outline-info btn-rincian-ruta"
+            data-id="<?= $sid ?>" data-nks="<?= \App\Core\View::e($s['nks']) ?>" data-sls="<?= \App\Core\View::e($s['nama_sls'] ?? '') ?>">
+            <i class="fas fa-tasks mr-1"></i>Rincian Ruta
+          </button>
+        </td>
+        <td class="text-center">
           <div class="btn-group btn-group-sm shadow-sm">
             <?php if ($row['status'] === 'AKTIF'): ?>
               <button type="button" class="btn btn-outline-success btn-terima-satuan" 
@@ -281,7 +306,7 @@ $opt = static function (?string $current, string $peran) use ($petugasOptions, $
       </tr>
       <?php endforeach; ?>
       <?php if ($sampel === []): ?>
-        <tr><td colspan="7" class="text-center text-muted py-4"><i class="fas fa-inbox fa-2x d-block mb-2"></i>Belum ada sampel di periode ini.</td></tr>
+        <tr><td colspan="8" class="text-center text-muted py-4"><i class="fas fa-inbox fa-2x d-block mb-2"></i>Belum ada sampel di periode ini.</td></tr>
       <?php endif; ?>
       </tbody>
     </table>
@@ -711,6 +736,189 @@ document.addEventListener('DOMContentLoaded', function () {
     var allChecked = $chks.length === $chks.filter(':checked').length;
     $chks.prop('checked', !allChecked);
   });
+
+<!-- ================= MODAL 4: IMPORT DOK KIRIM KAB ================= -->
+<div class="modal fade" id="modalImportDokKirim" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <form class="modal-content" method="post" action="/periode/<?= (int) $row['id'] ?>/dok-kirim/import" enctype="multipart/form-data">
+      <?= $csrf ?>
+      <div class="modal-header bg-warning text-dark">
+        <h5 class="modal-title font-weight-bold"><i class="fas fa-file-upload mr-2"></i>Import Dok Kirim Kab</h5>
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted">
+          Unggah file Excel template <b>Data Progress Pengiriman Kuesioner Susenas ke Kabupaten</b>
+          (sheet <code>data</code>, data dimulai baris 4). NKS divalidasi terhadap sampel periode ini.
+        </p>
+        <div class="form-group">
+          <label class="font-weight-bold">File Excel (.xls / .xlsx):</label>
+          <div class="custom-file">
+            <input type="file" class="custom-file-input" id="fileDokKirim" name="file_excel" accept=".xls,.xlsx" required>
+            <label class="custom-file-label" for="fileDokKirim" id="lblFileDokKirim">Pilih file...</label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-sm btn-default" data-dismiss="modal">Batal</button>
+        <button type="submit" class="btn btn-sm btn-warning text-dark"><i class="fas fa-upload mr-1"></i>Import Sekarang</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ================= MODAL 5: RINCIAN PROGRES KUESIONER RUMAH TANGGA ================= -->
+<div class="modal fade" id="modalRincianRuta" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-info text-white">
+        <h5 class="modal-title font-weight-bold">
+          <i class="fas fa-tasks mr-2"></i>Rincian Progres Kuesioner Rumah Tangga
+          <small class="font-weight-normal">— <span id="rutaNksLabel">-</span> · <span id="rutaSlsLabel">-</span></small>
+        </h5>
+        <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex justify-content-between align-items-center flex-wrap mb-2">
+          <div class="form-inline">
+            <label class="font-weight-bold mr-2 small">Tanggal Pengiriman:</label>
+            <input type="date" class="form-control form-control-sm mr-2" id="rutaTglSemua" value="<?= date('Y-m-d') ?>">
+            <label class="font-weight-bold mr-2 small">TTD (paraf/nama):</label>
+            <input type="text" class="form-control form-control-sm" id="rutaTtdSemua" placeholder="Paraf verifikator" style="max-width:160px">
+          </div>
+          <button type="button" class="btn btn-sm btn-success" id="btnSelesaiSemuaRuta">
+            <i class="fas fa-check-double mr-1"></i>Tandai 10 Ruta Selesai Sekaligus
+          </button>
+        </div>
+        <div class="table-responsive" style="max-height:420px;overflow-y:auto">
+          <table class="table table-sm table-bordered table-striped mb-0">
+            <thead class="thead-light" style="position:sticky;top:0;z-index:2">
+              <tr>
+                <th class="text-center">Ruta</th>
+                <th class="text-center">Status Selesai</th>
+                <th class="text-center">Blok Modul (1/0)</th>
+                <th class="text-center">Blok KP (1/0)</th>
+                <th>Tanggal Pengiriman</th>
+                <th>TTD Tim Sos</th>
+                <th>TTD Tim IPDS</th>
+                <th class="text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyRuta"><tr><td colspan="8" class="text-center text-muted py-3">Memuat...</td></tr></tbody>
+          </table>
+        </div>
+        <div id="rutaAlert" class="mt-2"></div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-sm btn-default" data-dismiss="modal">Tutup</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var csrfToken = <?= json_encode(\App\Core\Csrf::token()) ?>;
+  var periodeId = <?= (int) $row['id'] ?>;
+  var currentSampelId = null;
+
+  // Nama file import dok kirim
+  $('#fileDokKirim').on('change', function () {
+    $('#lblFileDokKirim').text(this.files[0] ? this.files[0].name : 'Pilih file...');
+  });
+
+  function rutaAlert(msg, ok) {
+    $('#rutaAlert').html('<div class="alert alert-' + (ok ? 'success' : 'danger') + ' alert-dismissible fade show py-2 mb-0">' + msg + '<button type="button" class="close py-1" data-dismiss="alert">&times;</button></div>');
+  }
+
+  function loadRuta(sid) {
+    $('#tbodyRuta').html('<tr><td colspan="8" class="text-center text-muted py-3">Memuat...</td></tr>');
+    $.getJSON('/periode/' + periodeId + '/sampel/' + sid + '/ruta', function (res) {
+      var html = '';
+      (res.ruta || []).forEach(function (r) {
+        var sud = r.status_selesai === 'SUDAH';
+        html += '<tr data-no="' + r.no_urut_ruta + '">';
+        html += '<td class="text-center font-weight-bold">' + r.no_urut_ruta + '</td>';
+        html += '<td class="text-center"><div class="custom-control custom-switch d-inline-block">';
+        html += '<input type="checkbox" class="custom-control-input ruta-chk-status" id="chkSt_' + r.no_urut_ruta + '"' + (sud ? ' checked' : '') + '>';
+        html += '<label class="custom-control-label small font-weight-bold" for="chkSt_' + r.no_urut_ruta + '">' + (sud ? 'SUDAH' : 'BELUM') + '</label></div></td>';
+        html += '<td class="text-center"><input type="checkbox" class="ruta-chk-modul"' + ((+r.catatan_modul) ? ' checked' : '') + '></td>';
+        html += '<td class="text-center"><input type="checkbox" class="ruta-chk-kp"' + ((+r.catatan_kp) ? ' checked' : '') + '></td>';
+        html += '<td><input type="date" class="form-control form-control-sm ruta-tgl" value="' + (r.tgl_pengiriman || '') + '"></td>';
+        html += '<td><input type="text" class="form-control form-control-sm ruta-ttd-sos" maxlength="100" value="' + (r.ttd_sos || '') + '" placeholder="Paraf Tim Sos"></td>';
+        html += '<td><input type="text" class="form-control form-control-sm ruta-ttd-ipds" maxlength="100" value="' + (r.ttd_ipds || '') + '" placeholder="Paraf Tim IPDS"></td>';
+        html += '<td class="text-center"><button type="button" class="btn btn-xs btn-primary btn-save-ruta" data-no="' + r.no_urut_ruta + '"><i class="fas fa-save"></i></button></td>';
+        html += '</tr>';
+      });
+      $('#tbodyRuta').html(html);
+    }).fail(function () {
+      $('#tbodyRuta').html('<tr><td colspan="8" class="text-center text-danger py-3">Gagal memuat data ruta.</td></tr>');
+    });
+  }
+
+  $(document).on('click', '.btn-rincian-ruta', function () {
+    currentSampelId = +$(this).data('id');
+    $('#rutaNksLabel').text('NKS ' + $(this).data('nks'));
+    $('#rutaSlsLabel').text($(this).data('sls') || '-');
+    $('#rutaAlert').empty();
+    $('#modalRincianRuta').modal('show');
+    loadRuta(currentSampelId);
+  });
+
+  $(document).on('change', '.ruta-chk-status', function () {
+    $(this).next('label').text(this.checked ? 'SUDAH' : 'BELUM');
+  });
+
+  $(document).on('click', '.btn-save-ruta', function () {
+    var no = $(this).data('no');
+    var tr = $('#tbodyRuta tr[data-no="' + no + '"]');
+    var btn = $(this);
+    btn.prop('disabled', true);
+    $.post('/periode/' + periodeId + '/sampel/' + currentSampelId + '/ruta', {
+      no_urut_ruta: no,
+      status_selesai: tr.find('.ruta-chk-status').prop('checked') ? 'SUDAH' : 'BELUM',
+      catatan_modul: tr.find('.ruta-chk-modul').prop('checked') ? '1' : '0',
+      catatan_kp: tr.find('.ruta-chk-kp').prop('checked') ? '1' : '0',
+      tgl_pengiriman: tr.find('.ruta-tgl').val(),
+      ttd_sos: tr.find('.ruta-ttd-sos').val(),
+      ttd_ipds: tr.find('.ruta-ttd-ipds').val(),
+      _csrf: csrfToken
+    }).done(function (res) {
+      rutaAlert(res.message || 'Tersimpan.', true);
+      btn.prop('disabled', false);
+    }).fail(function (xhr) {
+      var m = 'Gagal menyimpan.';
+      try { m = JSON.parse(xhr.responseText).message || m; } catch (e) {}
+      rutaAlert(m, false);
+      btn.prop('disabled', false);
+    });
+  });
+
+  $('#btnSelesaiSemuaRuta').on('click', function () {
+    var btn = $(this);
+    if (!currentSampelId) return;
+    btn.prop('disabled', true);
+    $.post('/periode/' + periodeId + '/sampel/' + currentSampelId + '/ruta/selesai-semua', {
+      tgl_pengiriman: $('#rutaTglSemua').val(),
+      ttd: $('#rutaTtdSemua').val(),
+      _ajax: '1',
+      _csrf: csrfToken
+    }).done(function (res) {
+      rutaAlert(res.message || 'Selesai.', true);
+      btn.prop('disabled', false);
+      loadRuta(currentSampelId);
+    }).fail(function (xhr) {
+      var m = 'Gagal.';
+      try { m = JSON.parse(xhr.responseText).message || m; } catch (e) {}
+      rutaAlert(m, false);
+      btn.prop('disabled', false);
+    });
+  });
+});
+</script>
+
+<?php require __DIR__ . '/../layouts/footer.phtml'; ?>
+
 
   // 4. Modal Riwayat Dokumen
   $('.btn-riwayat-dok').on('click', function () {

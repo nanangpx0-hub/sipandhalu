@@ -3,9 +3,24 @@ $title = 'Detail Petugas';
 require __DIR__ . '/../layouts/header.phtml';
 ?>
 
+<?php
+$roleStyles = [
+    'ADMIN' => 'background:#dc3545', 'OPERATOR' => 'background:#007bff', 'PML' => 'background:#ffc107;color:#212529!important',
+    'PCL' => 'background:#28a745', 'PENGOLAH' => 'background:#17a2b8', 'PENGAWAS_OLAH' => 'background:#6f42c1',
+    'SM_SOSIAL' => 'background:#20c997', 'SM_PLS' => 'background:#6610f2', 'VIEWER' => 'background:#6c757d',
+];
+$rCode = $row['role_code'] ?? '';
+$rStyle = $roleStyles[$rCode] ?? 'background:#6c757d';
+?>
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
-  <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-users mr-2 text-primary"></i><?= \App\Core\View::e($row['nama']) ?></h1>
-  <div class="text-nowrap">
+  <div>
+    <h1 class="h3 mb-0 text-gray-800 d-inline-block mr-2"><i class="fas fa-user mr-2 text-primary"></i><?= \App\Core\View::e($row['nama']) ?></h1>
+    <?php if (!empty($rCode)): ?>
+      <span class="badge p-1 px-2 text-white" style="<?= $rStyle ?>"><?= \App\Core\View::e($row['role_label'] ?? $rCode) ?></span>
+    <?php endif; ?>
+  </div>
+  <div class="text-nowrap mt-2 mt-sm-0">
+    <a href="/petugas/<?= (int) $row['id'] ?>/edit" class="btn btn-outline-primary btn-sm mr-1"><i class="fas fa-edit mr-1"></i>Ubah</a>
     <span class="badge badge-<?= ((int) $row['is_aktif'] === 1 ? 'success' : 'secondary') ?> mr-1">
       <?= ((int) $row['is_aktif'] === 1 ? '<i class="fas fa-check mr-1"></i>Aktif' : '<i class="fas fa-ban mr-1"></i>Nonaktif') ?>
     </span>
@@ -19,9 +34,10 @@ require __DIR__ . '/../layouts/header.phtml';
   <div class="card-body">
     <div class="row">
       <div class="col-12 col-md-6"><p><b>Nama</b><br><?= \App\Core\View::e($row['nama'] ?? '-') ?></p></div>
+      <div class="col-12 col-md-6"><p><b>Level / Peran</b><br><?= !empty($row['role_label']) ? \App\Core\View::e($row['role_label']) . ' <small class="text-muted">(' . \App\Core\View::e($row['role_code']) . ')</small>' : '<span class="text-muted">— Belum ditentukan —</span>' ?></p></div>
       <div class="col-12 col-md-6"><p><b>No HP</b><br><?= \App\Core\View::e($row['no_hp'] ?? '-') ?></p></div>
       <div class="col-12 col-md-6"><p><b>Email</b><br><?= \App\Core\View::e($row['email'] ?? '-') ?></p></div>
-      <div class="col-12 col-md-6"><p><b>Alamat</b><br><?= \App\Core\View::e($row['alamat'] ?? '-') ?></p></div>
+      <div class="col-12"><p><b>Alamat</b><br><?= \App\Core\View::e($row['alamat'] ?? '-') ?></p></div>
     </div>
   </div>
 </div>

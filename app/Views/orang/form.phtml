@@ -44,6 +44,19 @@ $action = $mode === 'create' ? '/petugas' : '/petugas/' . (int) $id;
           </div>
 
           <div class="form-group">
+            <label for="fld-role">Level / Peran Petugas</label>
+            <select name="role_id" id="fld-role" class="form-control">
+              <option value="">— Belum ditentukan —</option>
+              <?php foreach ($roles as $ro): ?>
+              <option value="<?= (int) $ro['id'] ?>" <?= ((string) ($row['role_id'] ?? '') === (string) $ro['id']) ? 'selected' : '' ?>>
+                <?= \App\Core\View::e($ro['label']) ?> (<?= \App\Core\View::e($ro['code']) ?>)
+              </option>
+              <?php endforeach; ?>
+            </select>
+            <small class="form-text text-muted">Tingkat petugas: PCL, PML, Pengolah Data, Pengawas Pengolahan, Operator, Admin, SM Sosial, SM PLS, Viewer.</small>
+          </div>
+
+          <div class="form-group">
             <div class="form-check">
               <input type="checkbox" name="is_aktif" id="fld-aktif" class="form-check-input" value="1" <?= ((int) ($row['is_aktif'] ?? 1) === 1) ? 'checked' : '' ?>>
               <label for="fld-aktif" class="form-check-label">Petugas aktif</label>

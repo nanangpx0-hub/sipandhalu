@@ -44,7 +44,7 @@ foreach (['sipandhalu', 'sipandhalu_test'] as $db) {
     echo "== $db ==\n";
     if ($fresh) {
         $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
-        foreach (['peminjaman_dokumen', 'penugasan', 'sampel', 'periode', 'sls', 'desa', 'kecamatan', 'audit_logs', 'users', 'orang_alias', 'orang', 'roles'] as $t) {
+        foreach (['peminjaman_dokumen', 'penugasan', 'sampel_ruta', 'sampel', 'periode', 'sls', 'desa', 'kecamatan', 'audit_logs', 'users', 'orang_alias', 'orang', 'roles'] as $t) {
             $pdo->exec("DROP TABLE IF EXISTS `$t`");
         }
         $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
@@ -57,6 +57,8 @@ foreach (['sipandhalu', 'sipandhalu_test'] as $db) {
         'database/migrations/002d_wilayah_final.sql',
         'database/migrations/002b_periode.sql',
         'database/migrations/003_dokumen_penerimaan_pinjam.sql',
+        'database/migrations/004_dokumen_kirim_ruta.sql',
+        'database/migrations/005_level_petugas.sql',
     ];
     foreach ($files as $f) {
         $sql = file_get_contents($base . '/' . $f);

@@ -34,14 +34,17 @@ final class OrangController
     public function index(Request $req, array $params = []): void
     {
         $q = (string) ($req->get['q'] ?? '');
+        $role = (string) ($req->get['role'] ?? 'all');
         $status = (string) ($req->get['status'] ?? 'all');
         $page = max(1, (int) ($req->get['page'] ?? 1));
         $perPage = 15;
-        $res = $this->repo->paginate($q, $page, $perPage, $status);
+        $res = $this->repo->paginate($q, $page, $perPage, $status, $role);
         Response::view('orang/index.phtml', [
             'rows' => $res['data'],
             'total' => $res['total'],
-            'q' => $q, 'status' => $status, 'page' => $page, 'perPage' => $perPage,
+            'roles' => $this->repo->roles(),
+            'rekap' => $this->repo->countByRole(),
+            'q' => $q, 'role' => $role, 'status' => $status, 'page' => $page, 'perPage' => $perPage,
             'success' => Session::flash('success'),
             'error' => Session::flash('error'),
             'import_errors' => Session::flash('import_errors') ?? [],
@@ -52,11 +55,13 @@ final class OrangController
     public function exportExcel(Request $req, array $params = []): void
     {
         $q = (string) ($req->get['q'] ?? '');
+        $role = (string) ($req->get['role'] ?? 'all');
         $status = (string) ($req->get['status'] ?? 'all');
         $rows = [];
-        foreach ($this->repo->exportAll($q, $status) as $r) {
+        foreach ($this->repo->exportAll($q, $status, $role) as $r) {
             $rows[] = [
                 $r['nama'],
+                (string) ($r['role_label'] ?? ($r['role_code'] ?? '—')),
                 (string) ($r['no_hp'] ?? ''),
                 (string) ($r['email'] ?? ''),
                 (string) ($r['alamat'] ?? ''),
@@ -66,7 +71,7 @@ final class OrangController
         }
         Excel::download(
             'petugas_' . date('Ymd_His') . '.xlsx',
-            ['Nama', 'No HP', 'Email', 'Alamat', 'Status', 'Jml Alias'],
+            ['Nama', 'Level / Peran', 'No HP', 'Email', 'Alamat', 'Status', 'Jml Alias'],
             $rows,
             'Petugas'
         );
@@ -77,18 +82,20 @@ final class OrangController
     {
         Excel::download(
             'template_petugas.xlsx',
-            ['Nama', 'No HP', 'Email', 'Alamat', 'Status'],
+            ['Nama', 'Level', 'No HP', 'Email', 'Alamat', 'Status'],
             [
-                ['Junaidi Ari Siswanto', '081234567890', 'junaidi@mail.id', 'Jl. Bhayangkara 12, Sumbersari', 'Aktif'],
-                ['Aminatus Sholeha', '081298765432', '', 'Jl. Kalimantan 5, Kaliwates', 'Aktif'],
+                ['Junaidi Ari Siswanto', 'Pencacah Lapangan', '081234567890', 'junaidi@mail.id', 'Jl. Bhayangkara 12, Sumbersari', 'Aktif'],
+                ['Aminatus Sholeha', 'Pengolah Data', '081298765432', '', 'Jl. Kalimantan 5, Kaliwates', 'Aktif'],
+                ['Budi Santoso', 'Pengawas Lapangan', '081211112222', 'budi@mail.id', 'Jl. Gajah Mada 10, Kaliwates', 'Aktif'],
             ],
             'Petugas',
             [
                 ['PETUNJUK IMPOR PETUGAS'],
                 ['1. Jangan ubah baris header / urutan kolom.'],
                 ['2. Kolom Nama wajib diisi (min. 3 huruf); nama yang sudah terdaftar akan DILEWATI.'],
-                ['3. Kolom Status: isi "Aktif" atau "Nonaktif" (kosong = Aktif).'],
-                ['4. Format file .xlsx, maksimal 2000 baris per impor.'],
+                ['3. Kolom Level: isi salah satu dari: Pencacah Lapangan, Pengawas Lapangan, Pengolah Data, Pengawas Pengolahan, Operator, Admin, SM Sosial, SM PLS, Viewer (atau kode: PCL, PML, PENGOLAH, PENGAWAS_OLAH, OPERATOR, ADMIN, SM_SOSIAL, SM_PLS, VIEWER).'],
+                ['4. Kolom Status: isi "Aktif" atau "Nonaktif" (kosong = Aktif).'],
+                ['5. Format file .xlsx, maksimal 2000 baris per impor.'],
             ]
         );
     }
@@ -115,12 +122,52 @@ final class OrangController
             Session::flash('error', 'Maksimal ' . Excel::maxImportRows() . ' baris per impor.');
             Response::redirect('/petugas');
         }
+
+        $rolesList = $this->repo->roles();
+        $roleMap = [];
+        foreach ($rolesList as $rl) {
+            $roleMap[strtoupper(trim($rl['code']))] = (int) $rl['id'];
+            $roleMap[strtoupper(trim($rl['label']))] = (int) $rl['id'];
+        }
+        // Alias nama level
+        if (isset($roleMap['PCL'])) {
+            $roleMap['PENCACAH'] = $roleMap['PCL'];
+            $roleMap['PENCACAH LAPANGAN'] = $roleMap['PCL'];
+        }
+        if (isset($roleMap['PML'])) {
+            $roleMap['PENGAWAS'] = $roleMap['PML'];
+            $roleMap['PENGAWAS LAPANGAN'] = $roleMap['PML'];
+        }
+        if (isset($roleMap['PENGOLAH'])) {
+            $roleMap['PENGOLAH DATA'] = $roleMap['PENGOLAH'];
+            $roleMap['OPERATOR ENTRY'] = $roleMap['PENGOLAH'];
+        }
+        if (isset($roleMap['PENGAWAS_OLAH'])) {
+            $roleMap['PENGAWAS PENGOLAHAN'] = $roleMap['PENGAWAS_OLAH'];
+            $roleMap['PENGAWAS OLAH'] = $roleMap['PENGAWAS_OLAH'];
+        }
+        if (isset($roleMap['SM_SOSIAL'])) {
+            $roleMap['SM SOSIAL'] = $roleMap['SM_SOSIAL'];
+            $roleMap['SM SOSEK'] = $roleMap['SM_SOSIAL'];
+            $roleMap['SOSIAL'] = $roleMap['SM_SOSIAL'];
+        }
+        if (isset($roleMap['SM_PLS'])) {
+            $roleMap['SM PLS'] = $roleMap['SM_PLS'];
+            $roleMap['SM OLAH'] = $roleMap['SM_PLS'];
+            $roleMap['IPDS'] = $roleMap['SM_PLS'];
+            $roleMap['PLS'] = $roleMap['SM_PLS'];
+        }
+
         $ok = 0;
         $errors = [];
         foreach ($data['rows'] as $i => $row) {
             $no = $i + 2; // +header
+            $rawRole = strtoupper(trim((string) Excel::pick($row, ['Level', 'Level / Peran', 'Peran', 'Jabatan'])));
+            $roleId = $rawRole !== '' ? ($roleMap[$rawRole] ?? null) : null;
+
             $in = [
                 'nama' => Excel::pick($row, ['Nama', 'Nama Lengkap', 'Nama Petugas']),
+                'role_id' => $roleId,
                 'no_hp' => Excel::pick($row, ['No HP', 'No. HP', 'HP', 'Telepon', 'WA', 'No HP/WA']),
                 'email' => Excel::pick($row, ['Email', 'E-mail']),
                 'alamat' => Excel::pick($row, ['Alamat', 'Alamat Rumah']),
@@ -148,6 +195,7 @@ final class OrangController
     {
         Response::view('orang/form.phtml', [
             'mode' => 'create', 'row' => Session::flash('old') ?? [],
+            'roles' => $this->repo->roles(),
             'errors' => Session::flash('errors') ?? [],
             'csrf' => \App\Core\Csrf::field(),
         ]);
@@ -157,6 +205,7 @@ final class OrangController
     {
         $in = [
             'nama' => $req->post['nama'] ?? '',
+            'role_id' => !empty($req->post['role_id']) ? (int) $req->post['role_id'] : null,
             'no_hp' => $req->post['no_hp'] ?? '',
             'email' => $req->post['email'] ?? '',
             'alamat' => $req->post['alamat'] ?? '',
@@ -202,6 +251,7 @@ final class OrangController
         Response::view('orang/form.phtml', [
             'mode' => 'edit', 'id' => $id,
             'row' => Session::flash('old') ?? $row,
+            'roles' => $this->repo->roles(),
             'errors' => Session::flash('errors') ?? [],
             'csrf' => \App\Core\Csrf::field(),
         ]);
@@ -212,6 +262,7 @@ final class OrangController
         $id = (int) ($params['id'] ?? 0);
         $in = [
             'nama' => $req->post['nama'] ?? '',
+            'role_id' => !empty($req->post['role_id']) ? (int) $req->post['role_id'] : null,
             'no_hp' => $req->post['no_hp'] ?? '',
             'email' => $req->post['email'] ?? '',
             'alamat' => $req->post['alamat'] ?? '',

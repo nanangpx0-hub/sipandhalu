@@ -13,7 +13,7 @@ final class OrangRepository
     }
 
     /** @return array{data:array<int,array<string,mixed>>,total:int} */
-    public function paginate(string $q, int $page, int $perPage, string $status = 'all'): array
+    public function paginate(string $q, int $page, int $perPage, string $status = 'all', string $role = 'all'): array
     {
         $where = [];
         $params = [];
@@ -28,18 +28,24 @@ final class OrangRepository
         } elseif ($status === 'nonaktif') {
             $where[] = 'o.is_aktif = 0';
         }
+        if ($role !== 'all') {
+            $where[] = 'r.code = :role';
+            $params[':role'] = $role;
+        }
         $w = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
 
-        $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM orang o {$w}");
+        $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM orang o LEFT JOIN roles r ON r.id=o.role_id {$w}");
         $stmt->execute($params);
         $total = (int) $stmt->fetchColumn();
 
         $offset = max(0, ($page - 1) * $perPage);
-        // ranking beban per periode menyusul tahap 2 (butuh tabel penugasan)
         $stmt = $this->pdo->prepare(
-            "SELECT o.*, (SELECT COUNT(*) FROM orang_alias a WHERE a.orang_id=o.id) AS jml_alias,
+            "SELECT o.*, r.code AS role_code, r.label AS role_label,
+                    (SELECT COUNT(*) FROM orang_alias a WHERE a.orang_id=o.id) AS jml_alias,
                     (SELECT COUNT(*) FROM users u WHERE u.orang_id=o.id) AS jml_akun
-             FROM orang o {$w} ORDER BY o.nama ASC LIMIT :l OFFSET :o"
+             FROM orang o
+             LEFT JOIN roles r ON r.id=o.role_id
+             {$w} ORDER BY o.nama ASC LIMIT :l OFFSET :o"
         );
         foreach ($params as $k => $v) {
             $stmt->bindValue($k, $v);
@@ -50,8 +56,8 @@ final class OrangRepository
         return ['data' => $stmt->fetchAll(), 'total' => $total];
     }
 
-    /** Semua baris untuk ekspor (dengan filter q/status, tanpa LIMIT). */
-    public function exportAll(string $q, string $status = 'all'): array
+    /** Semua baris untuk ekspor (dengan filter q/status/role, tanpa LIMIT). */
+    public function exportAll(string $q, string $status = 'all', string $role = 'all'): array
     {
         $where = [];
         $params = [];
@@ -66,10 +72,17 @@ final class OrangRepository
         } elseif ($status === 'nonaktif') {
             $where[] = 'o.is_aktif = 0';
         }
+        if ($role !== 'all') {
+            $where[] = 'r.code = :role';
+            $params[':role'] = $role;
+        }
         $w = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
         $stmt = $this->pdo->prepare(
-            "SELECT o.*, (SELECT COUNT(*) FROM orang_alias a WHERE a.orang_id=o.id) AS jml_alias
-             FROM orang o {$w} ORDER BY o.nama ASC"
+            "SELECT o.*, r.code AS role_code, r.label AS role_label,
+                    (SELECT COUNT(*) FROM orang_alias a WHERE a.orang_id=o.id) AS jml_alias
+             FROM orang o
+             LEFT JOIN roles r ON r.id=o.role_id
+             {$w} ORDER BY o.nama ASC"
         );
         $stmt->execute($params);
         return $stmt->fetchAll();
@@ -77,7 +90,12 @@ final class OrangRepository
 
     public function find(int $id): ?array
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM orang WHERE id=:id LIMIT 1');
+        $stmt = $this->pdo->prepare(
+            'SELECT o.*, r.code AS role_code, r.label AS role_label
+             FROM orang o
+             LEFT JOIN roles r ON r.id=o.role_id
+             WHERE o.id=:id LIMIT 1'
+        );
         $stmt->execute([':id' => $id]);
         $row = $stmt->fetch();
         return $row === false ? null : $row;
@@ -85,7 +103,12 @@ final class OrangRepository
 
     public function findByNormalized(string $normalized): ?array
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM orang WHERE nama_normalized=:n LIMIT 1');
+        $stmt = $this->pdo->prepare(
+            'SELECT o.*, r.code AS role_code, r.label AS role_label
+             FROM orang o
+             LEFT JOIN roles r ON r.id=o.role_id
+             WHERE o.nama_normalized=:n LIMIT 1'
+        );
         $stmt->execute([':n' => $normalized]);
         $row = $stmt->fetch();
         return $row === false ? null : $row;
@@ -95,14 +118,23 @@ final class OrangRepository
     public function resolveAlias(string $namaBebas): ?array
     {
         $norm = mb_strtolower(trim((string) preg_replace('/\s+/', ' ', $namaBebas)), 'UTF-8');
-        $stmt = $this->pdo->prepare('SELECT * FROM orang WHERE nama_normalized=:n LIMIT 1');
+        $stmt = $this->pdo->prepare(
+            'SELECT o.*, r.code AS role_code, r.label AS role_label
+             FROM orang o
+             LEFT JOIN roles r ON r.id=o.role_id
+             WHERE o.nama_normalized=:n LIMIT 1'
+        );
         $stmt->execute([':n' => $norm]);
         $row = $stmt->fetch();
         if ($row !== false) {
             return $row;
         }
         $stmt = $this->pdo->prepare(
-            'SELECT o.* FROM orang_alias a JOIN orang o ON o.id=a.orang_id WHERE a.alias_normalized=:n LIMIT 1'
+            'SELECT o.*, r.code AS role_code, r.label AS role_label
+             FROM orang_alias a
+             JOIN orang o ON o.id=a.orang_id
+             LEFT JOIN roles r ON r.id=o.role_id
+             WHERE a.alias_normalized=:n LIMIT 1'
         );
         $stmt->execute([':n' => $norm]);
         $row = $stmt->fetch();
@@ -112,13 +144,14 @@ final class OrangRepository
     public function create(array $d): int
     {
         $stmt = $this->pdo->prepare(
-            'INSERT INTO orang (nama, no_hp, email, alamat, is_aktif) VALUES (:nama,:hp,:email,:alamat,:aktif)'
+            'INSERT INTO orang (nama, no_hp, email, alamat, role_id, is_aktif) VALUES (:nama,:hp,:email,:alamat,:role_id,:aktif)'
         );
         $stmt->execute([
             ':nama' => $d['nama'],
             ':hp' => $d['no_hp'] ?: null,
             ':email' => $d['email'] ?: null,
             ':alamat' => $d['alamat'] ?: null,
+            ':role_id' => !empty($d['role_id']) ? (int) $d['role_id'] : null,
             ':aktif' => $d['is_aktif'] ?? 1,
         ]);
         return (int) $this->pdo->lastInsertId();
@@ -127,13 +160,14 @@ final class OrangRepository
     public function update(int $id, array $d): void
     {
         $stmt = $this->pdo->prepare(
-            'UPDATE orang SET nama=:nama, no_hp=:hp, email=:email, alamat=:alamat, is_aktif=:aktif WHERE id=:id'
+            'UPDATE orang SET nama=:nama, no_hp=:hp, email=:email, alamat=:alamat, role_id=:role_id, is_aktif=:aktif WHERE id=:id'
         );
         $stmt->execute([
             ':nama' => $d['nama'],
             ':hp' => $d['no_hp'] ?: null,
             ':email' => $d['email'] ?: null,
             ':alamat' => $d['alamat'] ?: null,
+            ':role_id' => !empty($d['role_id']) ? (int) $d['role_id'] : null,
             ':aktif' => $d['is_aktif'] ?? 1,
             ':id' => $id,
         ]);
@@ -181,5 +215,25 @@ final class OrangRepository
         $stmt->bindValue(':l', $limit, PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll();
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    public function roles(): array
+    {
+        return $this->pdo->query('SELECT * FROM roles ORDER BY id')->fetchAll();
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    public function countByRole(): array
+    {
+        return $this->pdo->query(
+            'SELECT r.id, r.code, r.label,
+                    COUNT(o.id) AS jml,
+                    (SELECT COUNT(*) FROM orang) AS total
+             FROM roles r
+             LEFT JOIN orang o ON o.role_id = r.id AND o.is_aktif = 1
+             GROUP BY r.id, r.code, r.label
+             ORDER BY r.id'
+        )->fetchAll();
     }
 }

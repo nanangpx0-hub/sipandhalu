@@ -12,6 +12,8 @@ use App\Core\Session;
 use App\Repositories\AuditRepository;
 use App\Repositories\PeriodeRepository;
 use App\Repositories\SampelRepository;
+use App\Repositories\SampelRutaRepository;
+use App\Services\DokumenKirimService;
 use App\Repositories\DokumenRepository;
 use App\Repositories\SlsRepository;
 use App\Services\DokumenService;
@@ -24,6 +26,8 @@ final class PeriodeController
     private SlsRepository $sls;
     private DokumenRepository $dokumenRepo;
     private DokumenService $dokumenSvc;
+    private SampelRutaRepository $rutaRepo;
+    private DokumenKirimService $dokKirimSvc;
 
     public function __construct()
     {
@@ -33,6 +37,8 @@ final class PeriodeController
         $this->sls = new SlsRepository($pdo);
         $this->dokumenRepo = new DokumenRepository($pdo);
         $this->dokumenSvc = new DokumenService($pdo, $this->sampel, $this->dokumenRepo, new AuditRepository($pdo));
+        $this->rutaRepo = new SampelRutaRepository($pdo);
+        $this->dokKirimSvc = new DokumenKirimService($pdo, $this->rutaRepo, new AuditRepository($pdo));
     }
 
     private function actor(): ?int
@@ -151,6 +157,7 @@ final class PeriodeController
             'q' => $q, 'page' => $page, 'perPage' => 15,
             'petugasOptions' => $petugasOptions, 'peranMap' => $peranMap,
             'pmlList' => $this->sampel->allPmlInPeriode($id),
+            'rutaSummary' => $this->rutaRepo->getSummaryByPeriodeId($id),
             'success' => Session::flash('success'), 'error' => Session::flash('error'),
             'import_errors' => Session::flash('import_errors') ?? [],
             'csrf' => \App\Core\Csrf::field(),
@@ -444,5 +451,113 @@ final class PeriodeController
             'riwayat' => $riwayat,
             'activePinjam' => $activePinjam,
         ]);
+    }
+
+    /* ==================== DOKUMEN KIRIM KAB (RUTA) ==================== */
+
+    /** GET /periode/{id}/sampel/{sid}/ruta — data 10 ruta untuk modal rincian. */
+    public function ajaxRuta(Request $req, array $params = []): void
+    {
+        $sid = (int) ($params['sid'] ?? 0);
+        $this->dokKirimSvc->initRutaForSampel($sid);
+        Response::json([
+            'sampel' => $this->sampel->find($sid),
+            'ruta' => $this->rutaRepo->getBySampelId($sid),
+        ]);
+    }
+
+    /** POST /periode/{id}/sampel/{sid}/ruta — simpan satu baris ruta (AJAX). */
+    public function simpanRuta(Request $req, array $params = []): void
+    {
+        $sid = (int) ($params['sid'] ?? 0);
+        $data = [
+            'no_urut_ruta' => (int) ($req->post['no_urut_ruta'] ?? 0),
+            'status_selesai' => trim((string) ($req->post['status_selesai'] ?? 'BELUM')),
+            'catatan_modul' => (int) !empty($req->post['catatan_modul']),
+            'catatan_kp' => (int) !empty($req->post['catatan_kp']),
+            'tgl_pengiriman' => trim((string) ($req->post['tgl_pengiriman'] ?? '')),
+            'ttd_sos' => trim((string) ($req->post['ttd_sos'] ?? '')),
+            'ttd_ipds' => trim((string) ($req->post['ttd_ipds'] ?? '')),
+        ];
+        try {
+            $this->dokKirimSvc->updateRutaSatuan($sid, $data, $this->actor(), $req->ip(), $req->userAgent());
+            Response::json(['ok' => true, 'message' => 'Baris ruta tersimpan.']);
+        } catch (\Throwable $t) {
+            http_response_code(400);
+            Response::json(['ok' => false, 'message' => $t->getMessage()]);
+        }
+    }
+
+    /** POST /periode/{id}/sampel/{sid}/ruta/selesai-semua — tandai 10 ruta selesai sekaligus. */
+    public function selesaiSemuaRuta(Request $req, array $params = []): void
+    {
+        $sid = (int) ($params['sid'] ?? 0);
+        $tgl = trim((string) ($req->post['tgl_pengiriman'] ?? '')) ?: date('Y-m-d');
+        $ttd = trim((string) ($req->post['ttd'] ?? ''));
+        $isAjax = (string) ($req->post['_ajax'] ?? '') === '1';
+        try {
+            $this->dokKirimSvc->setSemuaRutaSelesai($sid, $tgl, $ttd !== '' ? $ttd : null, $this->actor(), $req->ip(), $req->userAgent());
+            if ($isAjax) {
+                Response::json(['ok' => true, 'message' => '10 ruta ditandai selesai pada ' . $tgl . '.']);
+            }
+            Session::flash('success', 'Seluruh 10 ruta ditandai selesai pada ' . $tgl . '.');
+        } catch (\Throwable $t) {
+            if ($isAjax) {
+                http_response_code(400);
+                Response::json(['ok' => false, 'message' => $t->getMessage()]);
+            }
+            Session::flash('error', $t->getMessage());
+        }
+        Response::redirect('/periode/' . (int) ($params['id'] ?? 0));
+    }
+
+    /** POST /periode/{id}/dok-kirim/import — unggah & impor template Dok Kirim Kab. */
+    public function importDokKirim(Request $req, array $params = []): void
+    {
+        $id = (int) ($params['id'] ?? 0);
+        $err = \App\Core\Excel::cekUpload();
+        if ($err !== null) {
+            Session::flash('error', $err);
+            Response::redirect('/periode/' . $id);
+        }
+        $file = $_FILES['file_excel'];
+        try {
+            $rekap = $this->dokKirimSvc->importExcel($id, (string) $file['tmp_name'], $this->actor(), $req->ip(), $req->userAgent());
+            $msg = sprintf(
+                'Import Dok Kirim Kab: %d baris dibaca, %d tersimpan, %d dilewati.',
+                $rekap['total'],
+                $rekap['terupdate'],
+                $rekap['dilewati']
+            );
+            if ($rekap['errors'] !== []) {
+                Session::flash('import_errors', array_slice($rekap['errors'], 0, 20));
+                Session::flash('success', $msg . ' Periksa detail baris bermasalah di bawah.');
+            } else {
+                Session::flash('success', $msg);
+            }
+        } catch (\Throwable $t) {
+            Session::flash('error', 'Import gagal: ' . $t->getMessage());
+        }
+        Response::redirect('/periode/' . $id);
+    }
+
+    /** GET /periode/{id}/dok-kirim/export — unduh rekap sesuai layout template. */
+    public function exportDokKirim(Request $req, array $params = []): void
+    {
+        $id = (int) ($params['id'] ?? 0);
+        $row = $this->per->find($id);
+        $path = $this->dokKirimSvc->exportExcel($id);
+        $nama = 'dokkirimkab_' . preg_replace('/[^A-Za-z0-9]+/', '_', (string) ($row['label'] ?? $id)) . '_' . date('Ymd') . '.xlsx';
+        if (ob_get_level() > 0) {
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+        }
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . $nama . '"');
+        header('Cache-Control: max-age=0');
+        readfile($path);
+        @unlink($path);
+        exit;
     }
 }

@@ -13,7 +13,64 @@
 
 <script src="/assets/vendor/js/jquery.min.js"></script>
 <script src="/assets/vendor/js/bootstrap.bundle.min.js"></script>
+<script src="/assets/vendor/js/dataTables.bootstrap4.min.js"></script>
 <script src="/assets/adminlte/js/adminlte.min.js"></script>
+<script>
+// Toggle sidebar (hamburger) — deterministik & dijamin jalan di semua halaman.
+// Menggunakan capture phase agar handler ini dieksekusi sebelum data-api AdminLTE,
+// lalu menghentikan event supaya tidak terjadi toggle ganda (sidebar terasa "tidak bisa hide").
+(function () {
+  'use strict';
+  var KEY = 'sipandhalu.sidebar';
+
+  function isMobile() { return window.innerWidth <= 991.98; }
+
+  function applyState(collapsed) {
+    var b = document.body;
+    if (isMobile()) {
+      b.classList.remove('sidebar-collapse');
+      b.classList.toggle('sidebar-open', !collapsed);
+    } else {
+      b.classList.remove('sidebar-open');
+      b.classList.toggle('sidebar-collapse', collapsed);
+    }
+    try { localStorage.setItem(KEY, collapsed ? 'collapsed' : 'open'); } catch (e) {}
+    // Beri tahu AdminLTE bahwa layout berubah (recalculate fixed header/footer)
+    window.dispatchEvent(new Event('resize'));
+  }
+
+  // Pulihkan posisi sidebar terakhir (hanya desktop)
+  document.addEventListener('DOMContentLoaded', function () {
+    try {
+      var saved = localStorage.getItem(KEY);
+      if (saved === 'collapsed' && !isMobile()) {
+        document.body.classList.add('sidebar-collapse');
+        window.dispatchEvent(new Event('resize'));
+      }
+    } catch (e) {}
+  });
+
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    while (t && t !== document) {
+      if (t.matches && t.matches('[data-widget="pushmenu"]')) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        var b = document.body;
+        if (isMobile()) {
+          // Mode mobile: buka/tutup sidebar overlay
+          applyState(!b.classList.contains('sidebar-open'));
+        } else {
+          // Mode desktop: sembunyikan/munculkan sidebar
+          applyState(!b.classList.contains('sidebar-collapse'));
+        }
+        return;
+      }
+      t = t.parentNode;
+    }
+  }, true);
+})();
+</script>
 <script src="/assets/vendor/js/jquery.dataTables.min.js"></script>
 <script src="/assets/vendor/js/dataTables.bootstrap4.min.js"></script>
 <script>

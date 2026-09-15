@@ -4,14 +4,17 @@ require __DIR__ . '/../layouts/header.phtml';
 $pages = (int) ceil($total / $perPage);
 $badgeRole = [
     'ADMIN' => 'badge-danger', 'OPERATOR' => 'badge-primary', 'PENGOLAH' => 'badge-info',
+    'PENGAWAS_OLAH' => 'badge-purple', 'SM_SOSIAL' => 'badge-teal', 'SM_PLS' => 'badge-indigo',
     'PCL' => 'badge-success', 'PML' => 'badge-warning', 'VIEWER' => 'badge-secondary',
 ];
 $iconRole = [
     'ADMIN' => 'fa-user-shield', 'OPERATOR' => 'fa-user-cog', 'PENGOLAH' => 'fa-user-edit',
+    'PENGAWAS_OLAH' => 'fa-clipboard-check', 'SM_SOSIAL' => 'fa-user-tie', 'SM_PLS' => 'fa-server',
     'PCL' => 'fa-walking', 'PML' => 'fa-binoculars', 'VIEWER' => 'fa-user',
 ];
 $warnaRole = [
     'ADMIN' => 'danger', 'OPERATOR' => 'primary', 'PENGOLAH' => 'info',
+    'PENGAWAS_OLAH' => 'purple', 'SM_SOSIAL' => 'teal', 'SM_PLS' => 'indigo',
     'PCL' => 'success', 'PML' => 'warning', 'VIEWER' => 'secondary',
 ];
 function inisial(string $nama): string

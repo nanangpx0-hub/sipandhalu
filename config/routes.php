@@ -74,4 +74,11 @@ $router->post('/periode/{id}/sampel/{sid}/pinjam', PeriodeController::class, 'pi
 $router->post('/periode/{id}/kembali-dokumen', PeriodeController::class, 'kembaliDokumen', [AuthMiddleware::class, CsrfMiddleware::class]);
 $router->get('/periode/{id}/sampel/{sid}/riwayat-dokumen', PeriodeController::class, 'riwayatDokumen', [AuthMiddleware::class]);
 
+// Pemantauan Pengiriman Kuesioner Rumah Tangga (Dokumen Kirim Kab)
+$router->post('/periode/{id}/dok-kirim/import', PeriodeController::class, 'importDokKirim', [AuthMiddleware::class, CsrfMiddleware::class]);
+$router->get('/periode/{id}/dok-kirim/export', PeriodeController::class, 'exportDokKirim', [AuthMiddleware::class]);
+$router->get('/periode/{id}/sampel/{sid}/ruta', PeriodeController::class, 'ajaxRuta', [AuthMiddleware::class]);
+$router->post('/periode/{id}/sampel/{sid}/ruta', PeriodeController::class, 'simpanRuta', [AuthMiddleware::class, CsrfMiddleware::class]);
+$router->post('/periode/{id}/sampel/{sid}/ruta/selesai-semua', PeriodeController::class, 'selesaiSemuaRuta', [AuthMiddleware::class, CsrfMiddleware::class]);
+
 return $router;

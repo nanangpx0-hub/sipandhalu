@@ -37,6 +37,7 @@ final class OrangService
                 'no_hp' => trim((string) ($in['no_hp'] ?? '')),
                 'email' => trim((string) ($in['email'] ?? '')),
                 'alamat' => trim((string) ($in['alamat'] ?? '')),
+                'role_id' => !empty($in['role_id']) ? (int) $in['role_id'] : null,
                 'is_aktif' => isset($in['is_aktif']) ? (int) $in['is_aktif'] : 1,
             ]);
             $this->audit->log($actorId, 'CREATE', 'orang', (string) $id, null, $this->orang->find($id), $ip, $ua);
@@ -76,6 +77,7 @@ final class OrangService
                 'no_hp' => trim((string) ($in['no_hp'] ?? '')),
                 'email' => trim((string) ($in['email'] ?? '')),
                 'alamat' => trim((string) ($in['alamat'] ?? '')),
+                'role_id' => array_key_exists('role_id', $in) ? (!empty($in['role_id']) ? (int) $in['role_id'] : null) : (!empty($row['role_id']) ? (int) $row['role_id'] : null),
                 'is_aktif' => isset($in['is_aktif']) ? (int) $in['is_aktif'] : (int) $row['is_aktif'],
             ]);
             $this->audit->log($actorId, 'UPDATE', 'orang', (string) $id, $before, $this->orang->find($id), $ip, $ua);
