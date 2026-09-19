@@ -61,6 +61,7 @@ foreach (['sipandhalu', 'sipandhalu_test'] as $db) {
         'database/migrations/005_level_petugas.sql',
         'database/migrations/006_lk_pengolahan.sql',
         'database/migrations/007_jadwal_pengawas.sql',
+        'database/migrations/008_monitoring_optimizations.sql',
     ];
     foreach ($files as $f) {
         $sql = file_get_contents($base . '/' . $f);

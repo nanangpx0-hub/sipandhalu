@@ -525,9 +525,9 @@ CREATE TABLE `periode`  (
 -- ----------------------------
 -- Records of periode
 -- ----------------------------
-INSERT INTO `periode` VALUES (1, 2026, 'SUSENAS_S2', '2026-S2 Susenas September', NULL, NULL, 'AKTIF', NULL, '2026-09-12 12:55:32', '2026-09-12 12:55:32');
+INSERT INTO `periode` VALUES (1, 2026, 'SUSENAS_S2', '2026-S2 Susenas September', '2026-09-01', '2026-09-30', 'AKTIF', NULL, '2026-09-12 12:55:32', '2026-09-12 12:55:32');
 INSERT INTO `periode` VALUES (2, 2026, 'SUSENAS_S1', '2026-S1 Susenas Maret', '2026-03-01', '2026-03-31', 'TUTUP', 'Periode DUMMY (TUTUP): demo histori + rotasi petugas.', '2026-09-12 12:55:32', '2026-09-12 12:55:32');
-INSERT INTO `periode` VALUES (3, 2026, 'SERUTI_Q1', '2026-Q1 Seruti Triwulan I', NULL, NULL, 'DRAFT', 'Periode DUMMY (DRAFT): demo SLS berulang + penugasan baru.', '2026-09-12 12:55:32', '2026-09-12 12:55:32');
+INSERT INTO `periode` VALUES (3, 2026, 'SERUTI_Q1', '2026-Q1 Seruti Triwulan I', '2026-01-01', '2026-03-31', 'DRAFT', 'Periode DUMMY (DRAFT): demo SLS berulang + penugasan baru.', '2026-09-12 12:55:32', '2026-09-12 12:55:32');
 INSERT INTO `periode` VALUES (8, 2026, 'SERUTI_Q3', '2026-Q3 Seruti Triwulan III', '2026-07-01', '2026-09-30', 'AKTIF', 'Master wilayah & penugasan Seruti Triwulan III 2026 (integrasi Susenas S2 2026)', '2026-09-19 12:46:51', '2026-09-19 12:46:51');
 
 -- ----------------------------
@@ -722,6 +722,7 @@ CREATE TABLE `sampel_ruta`  (
   INDEX `ix_sampel_ruta_status`(`status_selesai` ASC, `tgl_pengiriman` ASC) USING BTREE,
   INDEX `ix_ruta_transfer`(`status_transfer_k` ASC, `status_transfer_kp` ASC, `status_transfer_seruti` ASC) USING BTREE,
   INDEX `ix_ruta_dokumen`(`status_dokumen` ASC) USING BTREE,
+  INDEX `ix_ruta_updated_at`(`updated_at` ASC) USING BTREE,
   CONSTRAINT `fk_ruta_sampel` FOREIGN KEY (`sampel_id`) REFERENCES `sampel` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `ck_no_urut_ruta` CHECK (`no_urut_ruta` between 1 and 10)
 ) ENGINE = InnoDB AUTO_INCREMENT = 1588 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
