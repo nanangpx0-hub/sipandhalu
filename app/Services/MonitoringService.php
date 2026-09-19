@@ -148,10 +148,29 @@ final class MonitoringService
                 return $requested;
             }
         }
-        foreach ($periodes as $p) {
-            if ((string) $p['status'] === 'AKTIF') {
-                return (int) $p['id'];
+
+        $aktif = array_filter($periodes, static fn (array $p): bool => (string) ($p['status'] ?? '') === 'AKTIF');
+        if ($aktif !== []) {
+            // Jika terdapat lebih dari 1 periode aktif, prioritaskan yang memiliki dokumen masuk terbanyak
+            if (count($aktif) > 1) {
+                $ids = array_map(static fn (array $p): int => (int) $p['id'], $aktif);
+                $in = implode(',', $ids);
+                $stmt = $this->pdo->query(
+                    "SELECT sp.periode_id, COUNT(*) AS jml_dok
+                     FROM sampel_ruta sr
+                     JOIN sampel sp ON sp.id = sr.sampel_id
+                     WHERE sp.periode_id IN ({$in}) AND sr.status_dokumen = 'ADA'
+                     GROUP BY sp.periode_id
+                     ORDER BY jml_dok DESC
+                     LIMIT 1"
+                );
+                $best = $stmt->fetchColumn();
+                if ($best !== false && (int) $best > 0) {
+                    return (int) $best;
+                }
             }
+
+            return (int) array_values($aktif)[0]['id'];
         }
 
         return $periodes === [] ? 0 : (int) $periodes[0]['id'];
