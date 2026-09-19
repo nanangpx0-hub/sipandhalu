@@ -671,4 +671,799 @@
         + '<span class="mon-filter-tag"><i class="fas fa-shield-halved mr-1" aria-hidden="true"></i>Audit 24 jam: ' + fmtInt(m.audit_24jam) + '</span>';
     }
   }
-})();
+
+  /* ----------------------------------------------- Filter Summary / Badges */
+
+  function renderFilterSummary(m) {
+    if (!els.filterTags) { els.filterTags = $('#monFilterTags'); }
+    if (!els.filterTags) { return; }
+
+    var f = state.filters || {};
+    var tags = [];
+
+    var addTag = function (label, key, valDisplay) {
+      tags.push('<span class="mon-filter-tag">'
+        + esc(label) + ': <b>' + esc(valDisplay) + '</b> '
+        + '<button type="button" class="mon-filter-tag__remove" data-remove-filter="' + esc(key) + '" aria-label="Hapus filter ' + esc(label) + '">&times;</button>'
+        + '</span>');
+    };
+
+    if (f.range && f.range !== 'periode') {
+      var rLabel = ({ today: 'Hari Ini', '7d': '7 Hari', '30d': '30 Hari', custom: 'Kustom' })[f.range] || f.range;
+      addTag('Waktu', 'range', rLabel);
+    }
+    if (f.date_from || f.date_to) {
+      addTag('Tanggal', 'date_range', (f.date_from || '—') + ' s/d ' + (f.date_to || '—'));
+    }
+    if (f.kec) {
+      var kecOpt = $('#fKec option[value="' + f.kec + '"]');
+      addTag('Kecamatan', 'kec', kecOpt ? kecOpt.textContent : f.kec);
+    }
+    if (f.desa_id && Number(f.desa_id) > 0) {
+      var desaOpt = $('#fDesa option[value="' + f.desa_id + '"]');
+      addTag('Desa', 'desa_id', desaOpt ? desaOpt.textContent : f.desa_id);
+    }
+    if (f.pengolah_id && Number(f.pengolah_id) > 0) {
+      var pengOpt = $('#fPengolah option[value="' + f.pengolah_id + '"]');
+      addTag('Pengolah', 'pengolah_id', pengOpt ? pengOpt.textContent : f.pengolah_id);
+    }
+    if (f.pcl_id && Number(f.pcl_id) > 0) {
+      var pclOpt = $('#fPcl option[value="' + f.pcl_id + '"]');
+      addTag('PCL', 'pcl_id', pclOpt ? pclOpt.textContent : f.pcl_id);
+    }
+    if (f.pml_id && Number(f.pml_id) > 0) {
+      var pmlOpt = $('#fPml option[value="' + f.pml_id + '"]');
+      addTag('PML', 'pml_id', pmlOpt ? pmlOpt.textContent : f.pml_id);
+    }
+    if (f.status_dokumen) {
+      addTag('Dokumen', 'status_dokumen', f.status_dokumen === 'ADA' ? 'Ada' : 'Belum');
+    }
+    if (f.transfer_stage) {
+      var stageMap = { BELUM_K: 'Dokumen saja', K: 'Entri K', KP: 'Valid KP', SERUTI: 'Seruti' };
+      addTag('Tahap', 'transfer_stage', stageMap[f.transfer_stage] || f.transfer_stage);
+    }
+    if (f.has_error !== '' && f.has_error !== undefined) {
+      addTag('Verifikasi', 'has_error', f.has_error === '1' ? 'Ada kendala' : 'Bersih');
+    }
+    if (f.q) {
+      addTag('Pencarian', 'q', f.q);
+    }
+
+    if (els.filterSummary) {
+      els.filterSummary.textContent = tags.length ? '(' + tags.length + ' aktif)' : '';
+    }
+
+    els.filterTags.innerHTML = tags.join('');
+
+    $$('[data-remove-filter]', els.filterTags).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var key = btn.getAttribute('data-remove-filter');
+        if (key === 'range') {
+          state.filters.range = 'periode';
+          state.filters.date_from = '';
+          state.filters.date_to = '';
+        } else if (key === 'date_range') {
+          state.filters.date_from = '';
+          state.filters.date_to = '';
+          state.filters.range = 'periode';
+        } else {
+          state.filters[key] = '';
+        }
+        state.filters.page = 1;
+        applyFiltersToForm(state.filters);
+        syncUrl(false);
+        load({ skeleton: true });
+      });
+    });
+  }
+
+  /* ---------------------------------------------------- Interaktif Filter */
+
+  function crossFilter(diff) {
+    Object.keys(diff || {}).forEach(function (k) {
+      state.filters[k] = diff[k];
+    });
+    state.filters.page = 1;
+    applyFiltersToForm(state.filters);
+    syncUrl(false);
+    load({ skeleton: true });
+  }
+
+  /* ------------------------------------------------ Tier 3: Data Grid & Pager */
+
+  function renderGrid(g) {
+    if (!els.gridBody) { return; }
+    var rows = g.rows || [];
+    var total = Number(g.total || 0);
+
+    if (els.gridInfo) {
+      els.gridInfo.textContent = fmtInt(total) + ' baris ruta';
+    }
+
+    if (rows.length === 0) {
+      var emptyHtml = '<div class="mon-empty"><i class="fas fa-table-list mon-empty__icon" aria-hidden="true"></i><h3>Tidak ada data ruta</h3><p>Tidak ada sampel ruta yang cocok dengan filter aktif.</p><button type="button" class="btn btn-sm btn-outline-secondary" id="monGridReset">Bersihkan Filter</button></div>';
+      els.gridBody.innerHTML = '<tr><td colspan="10">' + emptyHtml + '</td></tr>';
+      if (els.cards) { els.cards.innerHTML = emptyHtml; }
+      if (els.pager) { els.pager.innerHTML = ''; }
+      var resetBtn = $('#monGridReset', els.gridBody);
+      if (resetBtn) {
+        resetBtn.addEventListener('click', function () {
+          resetFilters();
+        });
+      }
+      return;
+    }
+
+    /* Render Table Rows */
+    els.gridBody.innerHTML = rows.map(function (r) {
+      var isChecked = state.selection.indexOf(r.id) >= 0;
+      var stageTone = toneClass(r.stage.tone);
+      var stageIcon = esc(r.stage.icon || 'fa-circle-info');
+      var dokCls = r.status_dokumen === 'ADA' ? 'mon-badge-inline--ya' : 'mon-badge-inline--tidak';
+      var kCls = r.transfer_k ? 'mon-badge-inline--ya' : 'mon-badge-inline--tidak';
+      var kpCls = r.transfer_kp ? 'mon-badge-inline--ya' : 'mon-badge-inline--tidak';
+      var serutiCls = r.transfer_seruti ? 'mon-badge-inline--ya' : 'mon-badge-inline--tidak';
+      var kendalaCls = r.anomali ? 'mon-badge-tone--danger' : 'mon-badge-tone--ok';
+      var kendalaIcon = r.anomali ? 'fa-triangle-exclamation' : 'fa-circle-check';
+
+      return '<tr data-id="' + r.id + '" aria-selected="' + (isChecked ? 'true' : 'false') + '">'
+        + '<td><input type="checkbox" class="mon-row-check" data-id="' + r.id + '" aria-label="Pilih ' + esc(r.nks) + ' ' + esc(r.ruta_label) + '"' + (isChecked ? ' checked' : '') + '></td>'
+        + '<td class="mon-sticky"><div class="mon-ident"><b>' + esc(r.nks) + '</b><small>' + esc(r.ruta_label) + '</small></div></td>'
+        + '<td><div class="mon-ident"><span>' + esc(r.desa) + '</span><small class="mon-muted">' + esc(r.kecamatan) + '</small></div></td>'
+        + '<td><div class="mon-ident"><span>PCL: ' + esc(r.pcl) + '</span><small class="mon-muted">PML: ' + esc(r.pml) + ' | Olah: ' + esc(r.pengolah) + '</small></div></td>'
+        + '<td><span class="mon-badge-tone mon-badge-tone--' + stageTone + '"><i class="fas ' + stageIcon + '" aria-hidden="true"></i>' + esc(r.stage.label) + '</span></td>'
+        + '<td><span class="mon-badge-inline ' + dokCls + '">' + esc(r.status_dokumen_label) + '</span></td>'
+        + '<td><span class="mon-badge-inline ' + kCls + '">' + (r.transfer_k ? 'Ya' : 'Tdk') + '</span></td>'
+        + '<td><span class="mon-badge-inline ' + kpCls + '">' + (r.transfer_kp ? 'Ya' : 'Tdk') + '</span></td>'
+        + '<td><span class="mon-badge-inline ' + serutiCls + '">' + (r.transfer_seruti ? 'Ya' : 'Tdk') + '</span></td>'
+        + '<td><span class="mon-badge-tone ' + kendalaCls + '"><i class="fas ' + kendalaIcon + '" aria-hidden="true"></i>' + esc(r.anomali_label) + '</span></td>'
+        + '<td><div class="mon-actions">'
+        + '<button type="button" class="mon-icon-btn" data-detail-id="' + r.id + '" title="Quick View & Riwayat Audit"><i class="fas fa-eye" aria-hidden="true"></i></button>'
+        + '<a href="' + esc(r.detail_url) + '" class="mon-icon-btn" target="_blank" title="Buka di lembar kerja pengolahan"><i class="fas fa-pen-to-square" aria-hidden="true"></i></a>'
+        + '</div></td>'
+        + '</tr>';
+    }).join('');
+
+    /* Render Mobile Cards */
+    if (els.cards) {
+      els.cards.innerHTML = rows.map(function (r) {
+        var stageTone = toneClass(r.stage.tone);
+        return '<div class="mon-data-card" data-id="' + r.id + '">'
+          + '<div class="mon-data-card__head">'
+          + '<div class="mon-ident"><b>' + esc(r.nks) + ' \u00b7 ' + esc(r.ruta_label) + '</b><small>' + esc(r.wilayah) + '</small></div>'
+          + '<span class="mon-badge-tone mon-badge-tone--' + stageTone + '">' + esc(r.stage.label) + '</span>'
+          + '</div>'
+          + '<div class="mon-data-card__body">'
+          + '<div class="mon-data-card__row"><span>Tim Lapangan</span><span>' + esc(r.pcl) + ' / ' + esc(r.pml) + '</span></div>'
+          + '<div class="mon-data-card__row"><span>Pengolah</span><span>' + esc(r.pengolah) + '</span></div>'
+          + '<div class="mon-data-card__row"><span>Dok / K / KP / Seruti</span><span>' + esc(r.status_dokumen_label) + ' / ' + (r.transfer_k ? 'Ya' : 'Tdk') + ' / ' + (r.transfer_kp ? 'Ya' : 'Tdk') + ' / ' + (r.transfer_seruti ? 'Ya' : 'Tdk') + '</span></div>'
+          + '<div class="mon-data-card__row"><span>Kendala</span><span>' + esc(r.anomali_label) + '</span></div>'
+          + '<div class="mon-actions mt-2">'
+          + '<button type="button" class="btn btn-xs btn-outline-primary" data-detail-id="' + r.id + '"><i class="fas fa-eye mr-1" aria-hidden="true"></i>Detail & Audit</button>'
+          + '<a href="' + esc(r.detail_url) + '" class="btn btn-xs btn-outline-secondary" target="_blank"><i class="fas fa-pen mr-1" aria-hidden="true"></i>Lembar Kerja</a>'
+          + '</div>'
+          + '</div></div>';
+      }).join('');
+    }
+
+    renderPager(g);
+    bindGridEvents();
+    updateSelectionUi();
+  }
+
+  function renderPager(g) {
+    if (!els.pager) { return; }
+    var page = Number(g.page || 1);
+    var pages = Number(g.pages || 1);
+    var total = Number(g.total || 0);
+    var dari = Number(g.dari || 0);
+    var sampai = Number(g.sampai || 0);
+
+    if (total === 0 || pages <= 1) {
+      els.pager.innerHTML = '<span class="mon-muted">Menampilkan ' + fmtInt(total) + ' baris</span>';
+      return;
+    }
+
+    var html = '<span class="mon-muted">Menampilkan <b>' + fmtInt(dari) + '</b>\u2013<b>' + fmtInt(sampai) + '</b> dari <b>' + fmtInt(total) + '</b> baris</span>';
+    html += '<div class="mon-pager__nav" role="navigation" aria-label="Halaman tabel">';
+
+    html += '<button type="button" data-page="1"' + (page <= 1 ? ' disabled' : '') + ' aria-label="Halaman pertama"><i class="fas fa-angles-left" aria-hidden="true"></i></button>';
+    html += '<button type="button" data-page="' + (page - 1) + '"' + (page <= 1 ? ' disabled' : '') + ' aria-label="Halaman sebelumnya"><i class="fas fa-angle-left" aria-hidden="true"></i></button>';
+
+    var startP = Math.max(1, page - 2);
+    var endP = Math.min(pages, page + 2);
+    if (startP > 1) {
+      html += '<button type="button" data-page="1">1</button>';
+      if (startP > 2) { html += '<span class="mon-muted px-1">&hellip;</span>'; }
+    }
+    for (var p = startP; p <= endP; p++) {
+      html += '<button type="button" data-page="' + p + '"' + (p === page ? ' aria-current="page"' : '') + '>' + p + '</button>';
+    }
+    if (endP < pages) {
+      if (endP < pages - 1) { html += '<span class="mon-muted px-1">&hellip;</span>'; }
+      html += '<button type="button" data-page="' + pages + '">' + pages + '</button>';
+    }
+
+    html += '<button type="button" data-page="' + (page + 1) + '"' + (page >= pages ? ' disabled' : '') + ' aria-label="Halaman berikutnya"><i class="fas fa-angle-right" aria-hidden="true"></i></button>';
+    html += '<button type="button" data-page="' + pages + '"' + (page >= pages ? ' disabled' : '') + ' aria-label="Halaman terakhir"><i class="fas fa-angles-right" aria-hidden="true"></i></button>';
+    html += '</div>';
+
+    els.pager.innerHTML = html;
+
+    $$('button[data-page]', els.pager).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var targetPage = Number(btn.getAttribute('data-page'));
+        if (!targetPage || targetPage === page || btn.disabled) { return; }
+        state.filters.page = targetPage;
+        syncUrl(false);
+        load({ skeleton: true });
+      });
+    });
+  }
+
+  function bindGridEvents() {
+    /* Click detail drawer */
+    $$('[data-detail-id]', els.gridBody).concat($$('[data-detail-id]', els.cards)).forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var id = Number(btn.getAttribute('data-detail-id'));
+        if (id > 0) { openDrawer(id); }
+      });
+    });
+
+    /* Row checkboxes */
+    $$('.mon-row-check[data-id]', els.gridBody).forEach(function (chk) {
+      chk.addEventListener('change', function () {
+        var id = Number(chk.getAttribute('data-id'));
+        var idx = state.selection.indexOf(id);
+        if (chk.checked && idx < 0) {
+          state.selection.push(id);
+        } else if (!chk.checked && idx >= 0) {
+          state.selection.splice(idx, 1);
+        }
+        var tr = chk.closest('tr');
+        if (tr) { tr.setAttribute('aria-selected', chk.checked ? 'true' : 'false'); }
+        updateSelectionUi();
+      });
+    });
+  }
+
+  function updateSelectionUi() {
+    var count = state.selection.length;
+    if (els.selection) {
+      els.selection.textContent = count + ' dipilih';
+    }
+    var checkAll = $('#monCheckAll');
+    if (checkAll && els.gridBody) {
+      var rowChecks = $$('.mon-row-check[data-id]', els.gridBody);
+      var allChecked = rowChecks.length > 0 && rowChecks.every(function (c) { return c.checked; });
+      checkAll.checked = allChecked;
+    }
+  }
+
+  /* ---------------------------------------------------- Drawer Quick View */
+
+  function openDrawer(id) {
+    if (!els.drawer || !els.drawerBackdrop) { return; }
+    state.openDrawerId = id;
+    els.drawerBackdrop.setAttribute('data-open', '1');
+    els.drawer.setAttribute('data-open', '1');
+    if (els.drawerTitle) { els.drawerTitle.textContent = 'Memuat rincian\u2026'; }
+    if (els.drawerSub) { els.drawerSub.textContent = ''; }
+    if (els.drawerBody) {
+      els.drawerBody.innerHTML = '<div class="mon-skeleton p-3"><div class="mon-skel-line mon-skel-line--md"></div><div class="mon-skel-block"></div></div>';
+    }
+    if (els.drawerFoot) { els.drawerFoot.innerHTML = ''; }
+
+    var url = CFG.detailUrl + '/' + id;
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+      .then(function (r) {
+        if (!r.ok) { throw new Error('HTTP ' + r.status); }
+        return r.json();
+      })
+      .then(function (json) {
+        if (!json || !json.ok || !json.detail) { throw new Error((json && json.message) || 'Gagal memuat detail'); }
+        renderDrawer(json.detail);
+      })
+      .catch(function (err) {
+        if (els.drawerBody) {
+          els.drawerBody.innerHTML = '<div class="mon-notice"><i class="fas fa-circle-exclamation" style="color:#b91c1c" aria-hidden="true"></i> Gagal memuat data: ' + esc(err.message) + '</div>';
+        }
+      });
+  }
+
+  function closeDrawer() {
+    state.openDrawerId = null;
+    if (els.drawer) { els.drawer.setAttribute('data-open', '0'); }
+    if (els.drawerBackdrop) { els.drawerBackdrop.setAttribute('data-open', '0'); }
+  }
+
+  function renderDrawer(detail) {
+    var r = detail.row || {};
+    var riwayat = detail.riwayat || [];
+    var aksi = detail.aksi || {};
+    var canQuick = !!aksi.can_quick_verify;
+
+    if (els.drawerTitle) {
+      els.drawerTitle.textContent = 'NKS ' + (r.nks || '—') + ' \u2014 ' + (r.ruta_label || '—');
+    }
+    if (els.drawerSub) {
+      els.drawerSub.textContent = (r.desa || '') + ', Kec. ' + (r.kecamatan || '') + ' \u00b7 SLS: ' + (r.nama_sls || '') + ' (' + (r.kode_full || '') + ')';
+    }
+
+    var html = '';
+
+    /* Rincian Identitas */
+    html += '<h4 class="mon-subhead">Identitas Sampel & Wilayah</h4>';
+    html += '<dl class="mon-kv">';
+    html += '<dt>Klasifikasi</dt><dd>' + esc(r.klasifikasi || '—') + '</dd>';
+    html += '<dt>Dusun / RW / RT</dt><dd>' + esc(r.dusun || '—') + ' / RW ' + esc(r.rw || '—') + ' / RT ' + esc(r.rt || '—') + '</dd>';
+    html += '<dt>Jumlah KK SLS</dt><dd>' + fmtInt(r.jml_kk) + ' KK</dd>';
+    html += '<dt>PCL Lapangan</dt><dd>' + esc(r.pcl || '—') + '</dd>';
+    html += '<dt>PML Pengawas</dt><dd>' + esc(r.pml || '—') + (r.hp_pml ? ' (' + esc(r.hp_pml) + ')' : '') + '</dd>';
+    html += '<dt>Petugas Pengolah</dt><dd>' + esc(r.pengolah || '—') + '</dd>';
+    html += '</dl>';
+
+    /* Status Pengolahan & Aksi Cepat */
+    html += '<h4 class="mon-subhead">Status Pengolahan Data</h4>';
+    if (canQuick) {
+      html += '<form id="monQuickForm">';
+      html += '<input type="hidden" name="ruta_id" value="' + esc(r.id) + '">';
+      html += '<div class="mon-card p-3 mb-3">';
+      html += '<div class="form-group mb-2"><label class="small font-weight-bold" for="qDok">Status Dokumen Fisik</label>'
+        + '<select id="qDok" name="status_dokumen" class="form-control form-control-sm">'
+        + '<option value="ADA"' + (r.status_dokumen === 'ADA' ? ' selected' : '') + '>ADA (Fisik Diterima)</option>'
+        + '<option value="BELUM"' + (r.status_dokumen === 'BELUM' ? ' selected' : '') + '>BELUM (Belum Diterima)</option>'
+        + '</select></div>';
+      html += '<div class="mon-switch"><input type="checkbox" id="qK" name="status_transfer_k" value="1"' + (r.transfer_k ? ' checked' : '') + '><label for="qK" class="mb-0">Transfer K (Entri Kor Selesai)</label></div>';
+      html += '<div class="mon-switch"><input type="checkbox" id="qKp" name="status_transfer_kp" value="1"' + (r.transfer_kp ? ' checked' : '') + '><label for="qKp" class="mb-0">Transfer KP (Validasi Konsistensi Selesai)</label></div>';
+      html += '<div class="mon-switch"><input type="checkbox" id="qSeruti" name="status_transfer_seruti" value="1"' + (r.transfer_seruti ? ' checked' : '') + '><label for="qSeruti" class="mb-0">Transfer Seruti (Integrasi Seruti Selesai)</label></div>';
+      html += '<button type="submit" class="btn btn-sm btn-primary mt-2" id="monQuickSubmit"><i class="fas fa-floppy-disk mr-1" aria-hidden="true"></i>Simpan Cepat Status</button>';
+      html += '</div>';
+      html += '</form>';
+    } else {
+      html += '<dl class="mon-kv">';
+      html += '<dt>Dokumen Fisik</dt><dd>' + (r.status_dokumen === 'ADA' ? '<span class="badge badge-success">ADA</span>' : '<span class="badge badge-secondary">BELUM</span>') + '</dd>';
+      html += '<dt>Transfer K</dt><dd>' + (r.transfer_k ? '<span class="badge badge-success">Sudah</span>' : '<span class="badge badge-secondary">Belum</span>') + '</dd>';
+      html += '<dt>Transfer KP</dt><dd>' + (r.transfer_kp ? '<span class="badge badge-success">Sudah</span>' : '<span class="badge badge-secondary">Belum</span>') + '</dd>';
+      html += '<dt>Transfer Seruti</dt><dd>' + (r.transfer_seruti ? '<span class="badge badge-success">Sudah</span>' : '<span class="badge badge-secondary">Belum</span>') + '</dd>';
+      html += '</dl>';
+      if (aksi.alasan && aksi.alasan.length) {
+        html += '<div class="mon-notice mt-2"><i class="fas fa-lock" aria-hidden="true"></i> ' + esc(aksi.alasan.join(' \u00b7 ')) + '</div>';
+      }
+    }
+
+    /* Catatan & Temuan */
+    if (r.ket_kp_pengolah || r.ket_m_pengolah || r.uji_petik_pengawas) {
+      html += '<h4 class="mon-subhead">Catatan Kendala & Temuan</h4>';
+      html += '<div class="mon-card p-3 mb-3 bg-light">';
+      if (r.ket_kp_pengolah) { html += '<p class="mb-1"><b>Catatan KP:</b> ' + esc(r.ket_kp_pengolah) + '</p>'; }
+      if (r.ket_m_pengolah) { html += '<p class="mb-1"><b>Catatan Modul:</b> ' + esc(r.ket_m_pengolah) + '</p>'; }
+      if (r.uji_petik_pengawas) { html += '<p class="mb-0"><b>Uji Petik Pengawas:</b> ' + esc(r.uji_petik_pengawas) + '</p>'; }
+      html += '</div>';
+    }
+
+    /* Jejak Audit */
+    html += '<h4 class="mon-subhead">Riwayat Perubahan (Audit Trail)</h4>';
+    if (!riwayat.length) {
+      html += '<div class="mon-notice"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i> Belum ada rekaman jejak audit pada baris ini.</div>';
+    } else {
+      html += '<ul class="mon-timeline">';
+      html += riwayat.map(function (item) {
+        var diffHtml = (item.perubahan || []).map(function (d) {
+          return '<code>' + esc(d.field) + ': ' + esc(d.before) + ' &rarr; ' + esc(d.after) + '</code>';
+        }).join(' ');
+        return '<li>'
+          + '<div class="font-weight-bold">' + esc(item.aksi) + ' \u2014 ' + esc(item.user) + '</div>'
+          + '<div class="mon-timeline__meta">' + fmtDate(item.waktu) + ' \u00b7 ' + String(item.waktu).slice(11) + ' \u00b7 IP: ' + esc(item.ip) + '</div>'
+          + (diffHtml ? '<div class="mon-diff">' + diffHtml + '</div>' : '')
+          + '</li>';
+      }).join('');
+      html += '</ul>';
+    }
+
+    if (els.drawerBody) { els.drawerBody.innerHTML = html; }
+
+    if (els.drawerFoot) {
+      els.drawerFoot.innerHTML = '<a href="' + esc(aksi.detail_url || '#') + '" class="btn btn-sm btn-outline-primary" target="_blank"><i class="fas fa-arrow-up-right-from-square mr-1" aria-hidden="true"></i>Lembar Kerja Penuh</a>'
+        + '<button type="button" class="btn btn-sm btn-secondary ml-auto" data-close-drawer>Tutup</button>';
+      $$('[data-close-drawer]', els.drawerFoot).forEach(function (btn) {
+        btn.addEventListener('click', closeDrawer);
+      });
+    }
+
+    /* Attach submit listener to Quick Verify form */
+    var form = $('#monQuickForm', els.drawerBody);
+    if (form) {
+      form.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        var submitBtn = $('#monQuickSubmit', form);
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Menyimpan\u2026'; }
+
+        var formData = new FormData(form);
+        formData.append('_csrf', CFG.csrfToken || '');
+
+        fetch(CFG.quickUrl, {
+          method: 'POST',
+          body: formData,
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          credentials: 'same-origin'
+        })
+          .then(function (r) {
+            if (!r.ok) { throw new Error('HTTP ' + r.status); }
+            return r.json();
+          })
+          .then(function (json) {
+            if (!json || !json.ok) { throw new Error((json && json.message) || 'Gagal menyimpan'); }
+            toast('Status berhasil diperbarui & tercatat pada audit trail.');
+            if (json.detail) { renderDrawer(json.detail); }
+            load();
+          })
+          .catch(function (err) {
+            toast('Aksi cepat gagal: ' + err.message, true);
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Simpan Cepat Status'; }
+          });
+      });
+    }
+  }
+
+  /* ---------------------------------------------------- Bulk Actions */
+
+  function bindBulkActions() {
+    $$('[data-bulk]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (!state.selection.length) {
+          toast('Pilih minimal 1 baris ruta di tabel terlebih dahulu.', true);
+          return;
+        }
+
+        var field = btn.getAttribute('data-bulk');
+        var val = btn.getAttribute('data-value') === '1';
+        var label = (field === 'status_transfer_k' ? 'Transfer K' : 'Transfer KP') + ' = ' + (val ? 'Ya' : 'Tidak');
+
+        var conf = confirm('Terapkan ' + label + ' untuk ' + state.selection.length + ' baris terpilih? Aksi akan dicatat pada audit log.');
+        if (!conf) { return; }
+
+        var body = new URLSearchParams();
+        body.append('field', field);
+        body.append('value', val ? '1' : '0');
+        body.append('periode_id', state.filters.periode_id || '0');
+        body.append('_csrf', CFG.csrfToken || '');
+        state.selection.forEach(function (id) { body.append('ruta_ids[]', id); });
+
+        setLive('syncing', 'Menyimpan massal\u2026');
+        fetch(CFG.bulkUrl, {
+          method: 'POST',
+          body: body,
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          credentials: 'same-origin'
+        })
+          .then(function (r) {
+            if (!r.ok) { throw new Error('HTTP ' + r.status); }
+            return r.json();
+          })
+          .then(function (json) {
+            if (!json || !json.ok) { throw new Error((json && json.message) || 'Gagal aksi massal'); }
+            toast(json.message || 'Aksi massal berhasil.');
+            state.selection = [];
+            load();
+          })
+          .catch(function (err) {
+            setLive('live', 'Live');
+            toast('Gagal aksi massal: ' + err.message, true);
+          });
+      });
+    });
+  }
+
+  /* ---------------------------------------------------- Filter Bindings */
+
+  function bindFilters() {
+    /* Select dropdowns */
+    $$('select[data-filter]', els.filters).forEach(function (sel) {
+      sel.addEventListener('change', function () {
+        var key = sel.getAttribute('data-filter');
+        state.filters[key] = sel.value;
+        state.filters.page = 1;
+
+        if (key === 'periode_id') {
+          handlePeriodeChange(sel.value);
+          return;
+        }
+        if (key === 'kec') {
+          handleKecamatanChange(sel.value);
+        }
+
+        syncUrl(false);
+        load({ skeleton: true });
+      });
+    });
+
+    /* Date inputs */
+    $$('input[type="date"][data-filter]', els.filters).forEach(function (inp) {
+      inp.addEventListener('change', function () {
+        var key = inp.getAttribute('data-filter');
+        state.filters[key] = inp.value;
+        state.filters.range = 'custom';
+        state.filters.page = 1;
+        applyFiltersToForm(state.filters);
+        syncUrl(false);
+        load({ skeleton: true });
+      });
+    });
+
+    /* Search input global (debounced) */
+    var searchInp = $('#fQ');
+    if (searchInp) {
+      searchInp.addEventListener('input', debounce(function () {
+        state.filters.q = searchInp.value.trim();
+        state.filters.page = 1;
+        syncUrl(false);
+        load({ skeleton: false });
+      }, DEBOUNCE_MS));
+    }
+
+    /* Range preset chips */
+    $$('.mon-chip[data-range]').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        var r = chip.getAttribute('data-range');
+        state.filters.range = r;
+        state.filters.page = 1;
+        if (r === 'today') {
+          var td = new Date().toISOString().slice(0, 10);
+          state.filters.date_from = td;
+          state.filters.date_to = td;
+        } else if (r === 'periode') {
+          state.filters.date_from = '';
+          state.filters.date_to = '';
+        }
+        applyFiltersToForm(state.filters);
+        syncUrl(false);
+        load({ skeleton: true });
+      });
+    });
+
+    /* Per-page selector */
+    var perPageSel = $('#monPerPage');
+    if (perPageSel) {
+      perPageSel.addEventListener('change', function () {
+        state.filters.per_page = Number(perPageSel.value) || 25;
+        state.filters.page = 1;
+        syncUrl(false);
+        load({ skeleton: true });
+      });
+    }
+
+    /* Sorting headers */
+    $$('th button[data-sort]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var key = btn.getAttribute('data-sort');
+        if (state.filters.sort === key) {
+          state.filters.dir = state.filters.dir === 'DESC' ? 'ASC' : 'DESC';
+        } else {
+          state.filters.sort = key;
+          state.filters.dir = 'ASC';
+        }
+        state.filters.page = 1;
+        syncUrl(false);
+        load({ skeleton: true });
+      });
+    });
+
+    /* Select all checkbox */
+    var checkAll = $('#monCheckAll');
+    if (checkAll) {
+      checkAll.addEventListener('change', function () {
+        var rowChecks = $$('.mon-row-check[data-id]', els.gridBody);
+        rowChecks.forEach(function (chk) {
+          chk.checked = checkAll.checked;
+          var id = Number(chk.getAttribute('data-id'));
+          var idx = state.selection.indexOf(id);
+          if (checkAll.checked && idx < 0) {
+            state.selection.push(id);
+          } else if (!checkAll.checked && idx >= 0) {
+            state.selection.splice(idx, 1);
+          }
+          var tr = chk.closest('tr');
+          if (tr) { tr.setAttribute('aria-selected', checkAll.checked ? 'true' : 'false'); }
+        });
+        updateSelectionUi();
+      });
+    }
+
+    /* Reset button */
+    var resetBtn = $('#monReset');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
+        resetFilters();
+      });
+    }
+
+    /* Refresh button */
+    var refreshBtn = $('#monRefresh');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', function () {
+        load({ toast: 'Data berhasil dimuat ulang' });
+      });
+    }
+
+    /* Export PDF button */
+    var pdfBtn = $('#monExportPdf');
+    if (pdfBtn) {
+      pdfBtn.addEventListener('click', function () {
+        window.print();
+      });
+    }
+
+    /* Mobile filter toggle */
+    if (els.filterToggle && els.filters) {
+      els.filterToggle.addEventListener('click', function () {
+        var isOpen = els.filters.getAttribute('data-open') === '1';
+        els.filters.setAttribute('data-open', isOpen ? '0' : '1');
+        els.filterToggle.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+      });
+    }
+
+    /* Drawer backdrop & close buttons */
+    $$('[data-close-drawer]').forEach(function (el) {
+      el.addEventListener('click', closeDrawer);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && state.openDrawerId) {
+        closeDrawer();
+      }
+    });
+  }
+
+  function handleKecamatanChange(kecKode) {
+    var desaSel = $('#fDesa');
+    if (!desaSel) { return; }
+    var opts = $$('option', desaSel);
+    var matchedCurrent = false;
+
+    opts.forEach(function (opt) {
+      if (!opt.value) { return; }
+      var optKec = opt.getAttribute('data-kec');
+      var show = !kecKode || optKec === kecKode;
+      opt.style.display = show ? '' : 'none';
+      if (!show && opt.selected) {
+        opt.selected = false;
+      }
+      if (show && opt.value === String(state.filters.desa_id)) {
+        matchedCurrent = true;
+      }
+    });
+    if (!matchedCurrent && state.filters.desa_id) {
+      state.filters.desa_id = '';
+      desaSel.value = '';
+    }
+  }
+
+  function handlePeriodeChange(periodeId) {
+    var url = CFG.optionsUrl + '?periode_id=' + encodeURIComponent(periodeId);
+    setLive('syncing', 'Memperbarui opsi\u2026');
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (json) {
+        if (json && json.ok && json.options) {
+          updateDropdownOptions(json.options);
+        }
+      })
+      .finally(function () {
+        syncUrl(false);
+        load({ skeleton: true });
+      });
+  }
+
+  function updateDropdownOptions(opts) {
+    var kecSel = $('#fKec');
+    if (kecSel && opts.kecamatan) {
+      var kHtml = '<option value="">Semua kecamatan</option>';
+      opts.kecamatan.forEach(function (k) {
+        kHtml += '<option value="' + esc(k.kode) + '">' + esc(k.nama || k.kode) + '</option>';
+      });
+      kecSel.innerHTML = kHtml;
+    }
+    var desaSel = $('#fDesa');
+    if (desaSel && opts.desa) {
+      var dHtml = '<option value="">Semua desa</option>';
+      opts.desa.forEach(function (d) {
+        dHtml += '<option value="' + d.id + '" data-kec="' + esc(d.kecamatan_kode || '') + '">' + esc(d.nama) + '</option>';
+      });
+      desaSel.innerHTML = dHtml;
+    }
+    var pengSel = $('#fPengolah');
+    var pclSel = $('#fPcl');
+    var pmlSel = $('#fPml');
+    if (opts.petugas) {
+      if (pengSel) {
+        var pengHtml = '<option value="">Semua pengolah</option>';
+        opts.petugas.filter(function (x) { return x.peran === 'PENGOLAH'; }).forEach(function (p) {
+          pengHtml += '<option value="' + p.id + '">' + esc(p.nama) + ' (' + p.jml + ')</option>';
+        });
+        pengSel.innerHTML = pengHtml;
+      }
+      if (pclSel) {
+        var pclHtml = '<option value="">Semua PCL</option>';
+        opts.petugas.filter(function (x) { return x.peran === 'PCL'; }).forEach(function (p) {
+          pclHtml += '<option value="' + p.id + '">' + esc(p.nama) + ' (' + p.jml + ')</option>';
+        });
+        pclSel.innerHTML = pclHtml;
+      }
+      if (pmlSel) {
+        var pmlHtml = '<option value="">Semua PML</option>';
+        opts.petugas.filter(function (x) { return x.peran === 'PML'; }).forEach(function (p) {
+          pmlHtml += '<option value="' + p.id + '">' + esc(p.nama) + ' (' + p.jml + ')</option>';
+        });
+        pmlSel.innerHTML = pmlHtml;
+      }
+    }
+  }
+
+  function resetFilters() {
+    var pId = state.filters.periode_id;
+    state.filters = {
+      periode_id: pId || 0,
+      range: 'periode',
+      date_from: '',
+      date_to: '',
+      kec: '',
+      desa_id: '',
+      pengolah_id: '',
+      pcl_id: '',
+      pml_id: '',
+      status_dokumen: '',
+      transfer_stage: '',
+      has_error: '',
+      q: '',
+      sort: 'nks',
+      dir: 'ASC',
+      page: 1,
+      per_page: 25
+    };
+    applyFiltersToForm(state.filters);
+    handleKecamatanChange('');
+    syncUrl(false);
+    load({ skeleton: true, toast: 'Filter telah direset ke default.' });
+  }
+
+  /* ---------------------------------------------------- Background Polling */
+
+  function startPolling() {
+    if (state.pollTimer) { clearInterval(state.pollTimer); }
+    state.pollTimer = setInterval(function () {
+      if (document.hidden) { return; }
+      load();
+    }, POLL_INTERVAL);
+
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden && Date.now() - state.lastSuccess > POLL_INTERVAL) {
+        load();
+      }
+    });
+  }
+
+  /* ---------------------------------------------------- Init */
+
+  function init() {
+    cacheEls();
+    state.filters = CFG.initialFilters || readFiltersFromForm();
+    applyFiltersToForm(state.filters);
+    bindFilters();
+    bindBulkActions();
+
+    if (CFG.initialPayload && CFG.initialGrid) {
+      renderAll({ ok: true, payload: CFG.initialPayload, grid: CFG.initialGrid, filters: state.filters });
+    } else {
+      load({ skeleton: true });
+    }
+
+    startPolling();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();

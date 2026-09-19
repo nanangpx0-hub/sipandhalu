@@ -1,0 +1,214 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Core\Csrf;
+use App\Core\View;
+
+$title = 'Monitoring Operasional';
+require __DIR__ . '/../layouts/header.phtml';
+
+/** @var array $periodes @var array $filters @var array|null $periode */
+/** @var array $payload @var array $grid @var array $options @var bool $canQuick @var string $csrf */
+
+$f = static fn (string $k, mixed $d = ''): string => (string) ($filters[$k] ?? $d);
+$kpi = $payload['kpi'] ?? [];
+$meta = $payload['meta'] ?? [];
+$g = $grid;
+$rows = $g['rows'] ?? [];
+$csrfToken = Csrf::token();
+$sort = (string) ($g['sort'] ?? 'nks');
+$dir = (string) ($g['dir'] ?? 'ASC');
+$th = static function (string $label, string $key) use ($sort, $dir): string {
+    $a = $sort === $key ? ($dir === 'DESC' ? ' <i class="fas fa-sort-down" aria-hidden="true"></i>' : ' <i class="fas fa-sort-up" aria-hidden="true"></i>') : '';
+    return '<button type="button" data-sort="' . View::e($key) . '" aria-label="Urutkan ' . View::e($label) . '">' . View::e($label) . $a . '</button>';
+};
+?>
+<link rel="stylesheet" href="/assets/css/monitoring.css">
+<div class="mon">
+<a class="mon-skip" href="#monKpi">Lewati ke ringkasan KPI</a>
+<a class="mon-skip" href="#monGrid">Lewati ke tabel operasional</a>
+<section class="mon-context" aria-label="Konteks dashboard monitoring">
+  <nav aria-label="Breadcrumb"><ol class="breadcrumb mon-breadcrumb">
+    <li class="breadcrumb-item"><a href="/">Dasbor</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Monitoring Operasional</li>
+  </ol></nav>
+  <div class="mon-context__row">
+    <div class="mon-context__title">
+      <span class="mon-context__icon"><i class="fas fa-gauge-high" aria-hidden="true"></i></span>
+      <div>
+        <h1>Monitoring Operasional Survei</h1>
+        <div class="mon-context__sub">Overview &rarr; Zoom &amp; Filter &rarr; Details on Demand &middot; <?= View::e($meta['periode_label'] ?? '—') ?> (<?= View::e($meta['periode_status'] ?? '—') ?>)</div>
+      </div>
+    </div>
+    <div class="mon-context__tools">
+      <span class="mon-live" id="monLive" data-state="live" role="status" aria-live="polite"><span class="mon-live__dot" aria-hidden="true"></span><span id="monLiveText">Live</span></span>
+      <span class="mon-stamp" id="monStamp">Diperbarui —</span>
+      <button type="button" class="mon-btn-ghost" id="monRefresh" aria-label="Muat ulang data sekarang"><i class="fas fa-rotate mr-1" aria-hidden="true"></i>Refresh</button>
+      <span class="btn-group" role="group" aria-label="Ekspor cepat">
+        <a class="mon-btn-ghost" id="monExportXlsx" href="/monitoring/export?format=xlsx"><i class="fas fa-file-excel mr-1" aria-hidden="true"></i>Excel</a>
+        <a class="mon-btn-ghost" id="monExportCsv" href="/monitoring/export?format=csv"><i class="fas fa-file-csv mr-1" aria-hidden="true"></i>CSV</a>
+        <button type="button" class="mon-btn-ghost" id="monExportPdf"><i class="fas fa-file-pdf mr-1" aria-hidden="true"></i>PDF</button>
+      </span>
+    </div>
+  </div>
+</section>
+<section class="mon-filters" id="monFilters" aria-label="Filter global dashboard">
+  <button type="button" class="btn btn-sm btn-outline-secondary mon-filter-toggle" id="monFilterToggle" aria-expanded="false" aria-controls="monFiltersGrid"><i class="fas fa-filter mr-1" aria-hidden="true"></i>Filter <span id="monFilterSummary"></span></button>
+  <div class="mon-filters__grid" id="monFiltersGrid">
+    <div class="mon-field mon-span-2"><label for="fPeriode">Periode</label>
+      <select id="fPeriode" class="form-control" data-filter="periode_id" aria-label="Periode survei">
+        <?php foreach ($periodes as $p): ?><option value="<?= (int) $p['id'] ?>" <?= ((int) $f('periode_id') === (int) $p['id']) ? 'selected' : '' ?>><?= View::e($p['label']) ?> (<?= View::e($p['status']) ?>)</option><?php endforeach; ?>
+      </select></div>
+    <div class="mon-field mon-span-2"><label>Rentang waktu</label>
+      <div class="mon-chips" role="group" aria-label="Preset rentang waktu">
+        <?php foreach ([['periode','Periode Aktif'],['today','Hari Ini'],['7d','7 Hari'],['30d','30 Hari'],['custom','Custom']] as [$rv,$rl]): ?>
+        <button type="button" class="mon-chip" data-range="<?= $rv ?>" aria-pressed="<?= $f('range','periode') === $rv ? 'true' : 'false' ?>"><?= $rl ?></button>
+        <?php endforeach; ?>
+      </div>
+      <input type="hidden" data-filter="range" id="fRange" value="<?= View::e($f('range','periode')) ?>"></div>
+    <div class="mon-field mon-span-2"><label for="fFrom">Dari tanggal</label><input type="date" id="fFrom" class="form-control" data-filter="date_from" value="<?= View::e($f('date_from')) ?>"></div>
+    <div class="mon-field mon-span-2"><label for="fTo">Sampai tanggal</label><input type="date" id="fTo" class="form-control" data-filter="date_to" value="<?= View::e($f('date_to')) ?>"></div>
+    <div class="mon-field mon-span-2"><label for="fKec">Kecamatan</label>
+      <select id="fKec" class="form-control" data-filter="kec" aria-label="Filter kecamatan"><option value="">Semua kecamatan</option>
+        <?php foreach ($options['kecamatan'] ?? [] as $o): ?><option value="<?= View::e((string) $o['kode']) ?>" <?= $f('kec') === (string) $o['kode'] ? 'selected' : '' ?>><?= View::e((string) ($o['nama'] ?? $o['kode'])) ?></option><?php endforeach; ?>
+      </select></div>
+    <div class="mon-field mon-span-2"><label for="fDesa">Desa</label>
+      <select id="fDesa" class="form-control" data-filter="desa_id" aria-label="Filter desa"><option value="">Semua desa</option>
+        <?php foreach ($options['desa'] ?? [] as $o): ?><option value="<?= (int) $o['id'] ?>" data-kec="<?= View::e((string) ($o['kecamatan_kode'] ?? '')) ?>" <?= ((int) $f('desa_id') === (int) $o['id']) ? 'selected' : '' ?>><?= View::e((string) $o['nama']) ?></option><?php endforeach; ?>
+      </select></div>
+    <div class="mon-field mon-span-2"><label for="fPengolah">Pengolah</label>
+      <select id="fPengolah" class="form-control" data-filter="pengolah_id" aria-label="Filter pengolah"><option value="">Semua pengolah</option>
+        <?php foreach (array_filter($options['petugas'] ?? [], static fn ($x) => ($x['peran'] ?? '') === 'PENGOLAH') as $o): ?><option value="<?= (int) $o['id'] ?>" <?= ((int) $f('pengolah_id') === (int) $o['id']) ? 'selected' : '' ?>><?= View::e((string) $o['nama']) ?> (<?= (int) $o['jml'] ?>)</option><?php endforeach; ?>
+      </select></div>
+
+
+    <div class="mon-field mon-span-2"><label for="fPml">PML</label>
+      <select id="fPml" class="form-control" data-filter="pml_id" aria-label="Filter PML"><option value="">Semua PML</option>
+        <?php foreach (array_filter($options['petugas'] ?? [], static fn ($x) => ($x['peran'] ?? '') === 'PML') as $o): ?><option value="<?= (int) $o['id'] ?>" <?= ((int) $f('pml_id') === (int) $o['id']) ? 'selected' : '' ?>><?= View::e((string) $o['nama']) ?> (<?= (int) $o['jml'] ?>)</option><?php endforeach; ?>
+      </select></div>
+    <div class="mon-field mon-span-2"><label for="fPcl">PCL</label>
+      <select id="fPcl" class="form-control" data-filter="pcl_id" aria-label="Filter PCL"><option value="">Semua PCL</option>
+        <?php foreach (array_filter($options['petugas'] ?? [], static fn ($x) => ($x['peran'] ?? '') === 'PCL') as $o): ?><option value="<?= (int) $o['id'] ?>" <?= ((int) $f('pcl_id') === (int) $o['id']) ? 'selected' : '' ?>><?= View::e((string) $o['nama']) ?> (<?= (int) $o['jml'] ?>)</option><?php endforeach; ?>
+      </select></div>
+    <div class="mon-field mon-span-2"><label for="fDok">Status dokumen</label>
+      <select id="fDok" class="form-control" data-filter="status_dokumen"><option value="">Semua</option>
+        <option value="ADA" <?= $f('status_dokumen') === 'ADA' ? 'selected' : '' ?>>Ada</option>
+        <option value="BELUM" <?= $f('status_dokumen') === 'BELUM' ? 'selected' : '' ?>>Belum</option></select></div>
+    <div class="mon-field mon-span-2"><label for="fStage">Tahap funnel</label>
+      <select id="fStage" class="form-control" data-filter="transfer_stage"><option value="">Semua tahap</option>
+        <?php foreach ([['BELUM_K','Dokumen saja'],['K','Entri K'],['KP','Valid KP'],['SERUTI','Seruti']] as [$sv,$sl]): ?><option value="<?= $sv ?>" <?= $f('transfer_stage') === $sv ? 'selected' : '' ?>><?= $sl ?></option><?php endforeach; ?>
+      </select></div>
+    <div class="mon-field mon-span-2"><label for="fErr">Status verifikasi</label>
+      <select id="fErr" class="form-control" data-filter="has_error"><option value="">Semua</option>
+        <option value="0" <?= $f('has_error') === '0' ? 'selected' : '' ?>>Bersih</option>
+        <option value="1" <?= $f('has_error') === '1' ? 'selected' : '' ?>>Ada kendala</option></select></div>
+    <div class="mon-field mon-span-4"><label for="fQ">Pencarian global (NKS / SLS / desa / petugas)</label>
+      <div class="mon-autocomplete"><input type="search" id="fQ" class="form-control" data-filter="q" value="<?= View::e($f('q')) ?>" placeholder="cth: 3509010012 atau nama desa" autocomplete="off" aria-label="Pencarian global">
+      <ul class="mon-autocomplete__list d-none" id="monSuggest" role="listbox" aria-label="Saran pencarian"></ul></div></div>
+    <div class="mon-field mon-span-2"><label>&nbsp;</label>
+      <div><button type="button" class="btn btn-sm btn-outline-secondary" id="monReset" aria-label="Reset semua filter"><i class="fas fa-eraser mr-1" aria-hidden="true"></i>Reset</button></div></div>
+  </div>
+  <div class="mon-filter-summary" id="monFilterTags" aria-live="polite"></div>
+</section>
+
+<section aria-label="Ringkasan eksekutif" id="monKpi">
+  <div class="mon-section__head"><h2 class="mon-section__title"><i class="fas fa-chart-simple mr-1" aria-hidden="true"></i>Tier 1 — Ringkasan Eksekutif</h2><span class="mon-muted" id="monMeta"></span></div>
+  <div class="mon-kpi-grid" id="monKpiGrid" role="region" aria-label="Kartu indikator kinerja utama">
+    <?php foreach ($kpi as $c): ?>
+    <div class="mon-kpi mon-kpi--<?= View::e($c['tone'] ?? 'neutral') ?>" tabindex="0" role="group" aria-label="<?= View::e($c['aria'] ?? '') ?>">
+      <div class="mon-kpi__top"><span class="mon-kpi__label"><?= View::e($c['label']) ?></span><i class="fas <?= View::e($c['icon']) ?> mon-kpi__icon" aria-hidden="true"></i></div>
+      <div class="mon-kpi__value"><?= View::e($c['value_display']) ?><small><?= View::e($c['unit']) ?></small></div>
+      <div class="mon-kpi__row"><span class="mon-kpi__pct"><?= View::e($c['pct_display']) ?></span><span class="mon-kpi__delta">&Delta; <?= View::e($c['delta_display']) ?></span></div>
+      <div class="mon-kpi__row"><span class="mon-tone mon-tone--<?= View::e($c['tone'] ?? 'neutral') ?>"><i class="fas <?= View::e($c['tone_icon']) ?>" aria-hidden="true"></i><?= View::e($c['tone_label']) ?></span></div>
+      <div class="mon-kpi__hint"><?= View::e($c['hint']) ?></div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <div class="mon-card mt-2"><div class="mon-card__head"><h3 class="mon-card__title"><i class="fas fa-layer-group mr-1" aria-hidden="true"></i>Alur Progres Berlapis</h3></div>
+    <div class="mon-card__body"><div class="mon-stack" id="monStack"></div><div class="mon-layer mt-2" id="monLayer"></div></div></div>
+</section>
+
+<section aria-label="Analisis dan perbandingan">
+  <div class="mon-section__head"><h2 class="mon-section__title"><i class="fas fa-chart-area mr-1" aria-hidden="true"></i>Tier 2 — Analisis</h2></div>
+  <div class="mon-charts">
+    <div class="mon-card mon-col-8"><div class="mon-card__head"><h3 class="mon-card__title">Tren kumulatif vs target</h3><div class="mon-chart-legend" id="monTrendLegend"></div></div>
+      <div class="mon-card__body"><div class="mon-chart mon-chart--trend" id="monTrendChart" role="img" aria-label="Grafik tren kumulatif"></div><div class="mon-tooltip" id="monTooltip" data-show="0" role="status"></div></div></div>
+    <div class="mon-card mon-col-4"><div class="mon-card__head"><h3 class="mon-card__title">Komposisi status</h3></div>
+      <div class="mon-card__body"><div class="mon-chart mon-chart--donut" id="monDonutChart"></div><div class="mon-chart-legend" id="monDonutLegend"></div></div></div>
+    <div class="mon-card mon-col-8"><div class="mon-card__head"><h3 class="mon-card__title">Peringkat beban pengolah</h3><span class="mon-muted" id="monRankMeta"></span></div>
+      <div class="mon-card__body"><div class="mon-rank" id="monRank" role="list" aria-label="Peringkat beban pengolah"></div></div></div>
+    <div class="mon-card mon-col-4"><div class="mon-card__head"><h3 class="mon-card__title">Rincian kendala</h3></div>
+      <div class="mon-card__body"><div class="mon-kendala" id="monKendala"></div><h4 class="mon-subhead">Konsistensi angka</h4><div id="monConsistency"></div></div></div>
+  </div>
+</section>
+<section aria-label="Data operasional granular" id="monGrid">
+  <div class="mon-section__head"><h2 class="mon-section__title"><i class="fas fa-table-list mr-1" aria-hidden="true"></i>Tier 3 — Data Operasional</h2></div>
+  <div class="mon-card">
+    <div class="mon-grid-toolbar">
+      <div class="mon-grid-toolbar__left"><span class="mon-selection" id="monSelection" aria-live="polite">0 dipilih</span>
+        <?php if ($canQuick): ?>
+        <span class="btn-group btn-group-sm" role="group" aria-label="Aksi massal">
+          <button type="button" class="btn btn-outline-success" data-bulk="status_transfer_k" data-value="1">K Ya</button>
+          <button type="button" class="btn btn-outline-success" data-bulk="status_transfer_kp" data-value="1">KP Ya</button>
+          <button type="button" class="btn btn-outline-secondary" data-bulk="status_transfer_k" data-value="0">K Tdk</button>
+          <button type="button" class="btn btn-outline-secondary" data-bulk="status_transfer_kp" data-value="0">KP Tdk</button>
+        </span>
+        <?php endif; ?>
+      </div>
+      <div class="mon-grid-toolbar__right">
+        <label class="mon-muted" for="monPerPage">Baris/halaman</label>
+        <select id="monPerPage" class="form-control form-control-sm" data-filter="per_page" aria-label="Jumlah baris per halaman">
+          <?php foreach ([10, 25, 50, 100] as $pp): ?><option value="<?= $pp ?>" <?= ((int) $f('per_page', 25) === $pp) ? 'selected' : '' ?>><?= $pp ?></option><?php endforeach; ?>
+        </select>
+        <span class="mon-muted" id="monGridInfo"></span>
+      </div>
+    </div>
+    <div class="mon-table-wrap mon-table-wrap--table">
+      <table class="mon-table" aria-label="Tabel operasional tingkat ruta">
+        <thead><tr>
+          <th scope="col"><input type="checkbox" class="mon-row-check" id="monCheckAll" aria-label="Pilih semua baris"></th>
+          <th scope="col" class="mon-sticky"><?= $th('NKS / Ruta', 'nks') ?></th>
+          <th scope="col"><?= $th('Wilayah', 'desa') ?></th>
+          <th scope="col">Tim</th>
+          <th scope="col">Tahap</th>
+          <th scope="col">Dok</th><th scope="col">K</th><th scope="col">KP</th><th scope="col">Seruti</th>
+          <th scope="col">Kendala</th>
+          <th scope="col">Aksi</th>
+        </tr></thead>
+        <tbody id="monGridBody"></tbody>
+      </table>
+    </div>
+    <div class="mon-cards" id="monCards" aria-label="Daftar kartu data mobile"></div>
+    <nav class="mon-pager" id="monPager" aria-label="Navigasi halaman tabel"></nav>
+  </div>
+</section>
+<script>
+window.MON_CONFIG = {
+  baseUrl: '/monitoring',
+  dataUrl: '/monitoring/data',
+  optionsUrl: '/monitoring/options',
+  detailUrl: '/monitoring/detail',
+  quickUrl: '/monitoring/quick-verify',
+  bulkUrl: '/monitoring/bulk-verify',
+  csrfToken: <?= json_encode($csrfToken, JSON_UNESCAPED_SLASHES) ?>,
+  canQuick: <?= $canQuick ? 'true' : 'false' ?>,
+  initialFilters: <?= json_encode($filters, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+  initialPayload: <?= json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+  initialGrid: <?= json_encode($grid, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+  storageKey: 'sipandhalu.monitoring.v1'
+};
+</script>
+<div class="mon-drawer-backdrop" id="monDrawerBackdrop" data-close-drawer></div>
+<aside class="mon-drawer" id="monDrawer" role="dialog" aria-modal="true" aria-labelledby="monDrawerTitle" data-open="0">
+  <div class="mon-drawer__head"><div><h3 class="mon-drawer__title" id="monDrawerTitle">Pratinjau ruta</h3><div class="mon-drawer__sub" id="monDrawerSub"></div></div>
+    <button type="button" class="mon-drawer__close" data-close-drawer aria-label="Tutup pratinjau (Esc)"><i class="fas fa-xmark" aria-hidden="true"></i></button></div>
+  <div class="mon-drawer__body" id="monDrawerBody"></div>
+  <div class="mon-drawer__foot" id="monDrawerFoot"></div>
+</aside>
+<?= $csrf ?>
+</div>
+<script src="/assets/js/monitoring.js" defer></script>
+<?php require __DIR__ . '/../layouts/footer.phtml'; ?>
+
+
