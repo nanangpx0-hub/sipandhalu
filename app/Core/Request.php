@@ -40,6 +40,15 @@ final class Request
         return trim((string) $v);
     }
 
+    public function query(string $key, ?string $default = null): ?string
+    {
+        $v = $this->get[$key] ?? $default;
+        if ($v === null) {
+            return null;
+        }
+        return trim((string) $v);
+    }
+
     public function ip(): string
     {
         return $this->server['REMOTE_ADDR'] ?? '127.0.0.1';

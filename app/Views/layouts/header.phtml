@@ -28,6 +28,7 @@ $active = function (string $prefix): string {
 <link rel="stylesheet" href="/assets/vendor/css/dataTables.bootstrap4.min.css">
 <link rel="stylesheet" href="/assets/adminlte/css/adminlte.min.css">
 <link rel="stylesheet" href="/assets/css/app.css">
+<?php if (!empty($headExtra)): ?><?= $headExtra ?><?php endif; ?>
 </head>
 <body class="hold-transition sidebar-mini layout-navbar-fixed layout-footer-fixed accent-indigo">
 <div class="wrapper">
@@ -92,6 +93,8 @@ $active = function (string $prefix): string {
           <li class="nav-item"><a href="/petugas" class="nav-link <?= $active('/petugas') ?>"><i class="nav-icon fas fa-users"></i><p>Petugas</p></a></li>
           <li class="nav-item"><a href="/sls" class="nav-link <?= $active('/sls') ?>"><i class="nav-icon fas fa-map-marked-alt"></i><p>SLS</p></a></li>
           <li class="nav-item"><a href="/periode" class="nav-link <?= $active('/periode') ?>"><i class="nav-icon fas fa-calendar-alt"></i><p>Periode</p></a></li>
+          <li class="nav-item"><a href="/pengolahan" class="nav-link <?= $active('/pengolahan') ?>"><i class="nav-icon fas fa-laptop-code text-warning"></i><p>Pengolahan (LK)</p></a></li>
+          <li class="nav-item"><a href="/monitoring" class="nav-link <?= $active('/monitoring') ?>"><i class="nav-icon fas fa-chart-line text-info"></i><p>Monitoring</p></a></li>
           <?php if ($isAdmin): ?>
           <li class="nav-header">ADMINISTRASI</li>
           <li class="nav-item"><a href="/users" class="nav-link <?= $active('/users') ?>"><i class="nav-icon fas fa-user-shield"></i><p>Users</p></a></li>

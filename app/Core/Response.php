@@ -12,10 +12,10 @@ final class Response
         exit;
     }
 
-    public static function view(string $template, array $data = [], int $status = 200): void
+    public static function view(string $template, array $data = [], int $httpCode = 200): void
     {
-        http_response_code($status);
-        extract($data, EXTR_SKIP);
+        http_response_code($httpCode);
+        extract($data, EXTR_OVERWRITE);
         $file = dirname(__DIR__) . '/Views/' . $template;
         require $file;
         exit;

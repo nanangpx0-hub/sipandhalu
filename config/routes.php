@@ -5,7 +5,9 @@ declare(strict_types=1);
 /** @var \App\Core\Router $router */
 use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
+use App\Controllers\MonitoringController;
 use App\Controllers\OrangController;
+use App\Controllers\PengolahanController;
 use App\Controllers\PeriodeController;
 use App\Controllers\SlsController;
 use App\Controllers\UserController;
@@ -80,5 +82,22 @@ $router->get('/periode/{id}/dok-kirim/export', PeriodeController::class, 'export
 $router->get('/periode/{id}/sampel/{sid}/ruta', PeriodeController::class, 'ajaxRuta', [AuthMiddleware::class]);
 $router->post('/periode/{id}/sampel/{sid}/ruta', PeriodeController::class, 'simpanRuta', [AuthMiddleware::class, CsrfMiddleware::class]);
 $router->post('/periode/{id}/sampel/{sid}/ruta/selesai-semua', PeriodeController::class, 'selesaiSemuaRuta', [AuthMiddleware::class, CsrfMiddleware::class]);
+
+// Lembar Kerja (LK) Pengolahan Sampel & Kendali Mutu
+$router->get('/pengolahan', PengolahanController::class, 'index', [AuthMiddleware::class]);
+$router->post('/pengolahan/update-ruta', PengolahanController::class, 'updateRuta', [AuthMiddleware::class, CsrfMiddleware::class]);
+$router->post('/pengolahan/terima-dokumen', PengolahanController::class, 'terimaDokumen', [AuthMiddleware::class, CsrfMiddleware::class]);
+$router->post('/pengolahan/batch-transfer', PengolahanController::class, 'batchTransfer', [AuthMiddleware::class, CsrfMiddleware::class]);
+$router->get('/pengolahan/export', PengolahanController::class, 'exportExcel', [AuthMiddleware::class]);
+$router->post('/pengolahan/import', PengolahanController::class, 'importExcel', [AuthMiddleware::class, CsrfMiddleware::class]);
+
+// Dashboard Monitoring Operasional (Enterprise) — Tier 1 KPI, Tier 2 chart, Tier 3 grid.
+$router->get('/monitoring', MonitoringController::class, 'index', [AuthMiddleware::class]);
+$router->get('/monitoring/data', MonitoringController::class, 'data', [AuthMiddleware::class]);
+$router->get('/monitoring/options', MonitoringController::class, 'options', [AuthMiddleware::class]);
+$router->get('/monitoring/export', MonitoringController::class, 'export', [AuthMiddleware::class]);
+$router->get('/monitoring/detail/{id}', MonitoringController::class, 'detail', [AuthMiddleware::class]);
+$router->post('/monitoring/quick-verify', MonitoringController::class, 'quickVerify', [AuthMiddleware::class, CsrfMiddleware::class]);
+$router->post('/monitoring/bulk-verify', MonitoringController::class, 'bulkVerify', [AuthMiddleware::class, CsrfMiddleware::class]);
 
 return $router;

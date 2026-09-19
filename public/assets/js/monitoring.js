@@ -1,0 +1,674 @@
+/* ==========================================================================
+   SIPANDHALU — Dashboard Monitoring Operasional (interaktif)
+   Vanilla JS, tanpa dependensi eksternal (syarat: 100% offline / intranet BPS).
+   Grafik dirender sebagai SVG native.
+   ========================================================================== */
+(function () {
+  'use strict';
+
+  var CFG = window.MON_CONFIG || {};
+  var POLL_INTERVAL = 45000;      /* 45 detik saat tab aktif */
+  var DEBOUNCE_MS = 300;
+
+  /* ------------------------------------------------------------------ util */
+
+  var $ = function (sel, root) { return (root || document).querySelector(sel); };
+  var $$ = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
+
+  function esc(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  }
+
+  function fmtInt(n) {
+    var v = Number(n || 0);
+    return v.toLocaleString('id-ID');
+  }
+
+  function fmtPct(n, dec) {
+    if (n === null || n === undefined) { return '\u2014'; }
+    return Number(n).toLocaleString('id-ID', { minimumFractionDigits: dec === 0 ? 0 : 1, maximumFractionDigits: dec === 0 ? 0 : 1 }) + '%';
+  }
+
+  function fmtDate(s) {
+    if (!s) { return '\u2014'; }
+    var d = new Date(String(s).replace(' ', 'T'));
+    if (isNaN(d.getTime())) { return String(s); }
+    return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
+  function debounce(fn, ms) {
+    var t = null;
+    return function () {
+      var args = arguments, self = this;
+      clearTimeout(t);
+      t = setTimeout(function () { fn.apply(self, args); }, ms);
+    };
+  }
+
+  function toneClass(t) {
+    return ['ok', 'warn', 'danger', 'neutral'].indexOf(t) >= 0 ? t : 'neutral';
+  }
+
+  function toneIcon(t) {
+    return ({ ok: 'fa-circle-check', warn: 'fa-triangle-exclamation', danger: 'fa-circle-exclamation' })[t] || 'fa-circle-info';
+  }
+
+  function toneBadge(t, label) {
+    var c = toneClass(t);
+    return '<span class="mon-badge-tone mon-badge-tone--' + c + '"><i class="fas ' + toneIcon(c) + '" aria-hidden="true"></i>' + esc(label) + '</span>';
+  }
+
+  /* --------------------------------------------------------------- state */
+
+  var state = {
+    filters: {},
+    seriesHidden: {},
+    selection: [],
+    openDrawerId: null,
+    pollTimer: null,
+    lastSuccess: 0,
+    loading: false
+  };
+
+  var els = {};
+
+  function cacheEls() {
+    els.live = $('#monLive');
+    els.liveText = $('#monLiveText');
+    els.stamp = $('#monStamp');
+    els.filters = $('#monFilters');
+    els.filterToggle = $('#monFilterToggle');
+    els.filterSummary = $('#monFilterSummary');
+    els.kpiGrid = $('#monKpiGrid');
+    els.stack = $('#monStack');
+    els.layer = $('#monLayer');
+    els.trend = $('#monTrendChart');
+    els.trendLegend = $('#monTrendLegend');
+    els.trendMeta = $('#monTrendMeta');
+    els.donut = $('#monDonutChart');
+    els.donutLegend = $('#monDonutLegend');
+    els.rank = $('#monRank');
+    els.rankMeta = $('#monRankMeta');
+    els.kendala = $('#monKendala');
+    els.consistency = $('#monConsistency');
+    els.gridBody = $('#monGridBody');
+    els.cards = $('#monCards');
+    els.pager = $('#monPager');
+    els.gridInfo = $('#monGridInfo');
+    els.selection = $('#monSelection');
+    els.tooltip = $('#monTooltip');
+    els.drawer = $('#monDrawer');
+    els.drawerBackdrop = $('#monDrawerBackdrop');
+    els.drawerTitle = $('#monDrawerTitle');
+    els.drawerSub = $('#monDrawerSub');
+    els.drawerBody = $('#monDrawerBody');
+    els.drawerFoot = $('#monDrawerFoot');
+    els.meta = $('#monMeta');
+  }
+
+  /* --------------------------------------------------- status koneksi data */
+
+  function setLive(stateName, text) {
+    if (!els.live) { return; }
+    els.live.setAttribute('data-state', stateName);
+    if (els.liveText) { els.liveText.textContent = text; }
+    els.live.setAttribute('aria-label', 'Status koneksi data: ' + text);
+  }
+
+  /* ------------------------------------------------- URL <-> state filter */
+
+  function filtersToQuery(f) {
+    var q = [];
+    Object.keys(f || {}).forEach(function (k) {
+      var v = f[k];
+      if (v === null || v === undefined || v === '') { return; }
+      if (v === 0 && k !== 'desa_id') { return; }
+      q.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
+    });
+    return q.join('&');
+  }
+
+  function syncUrl(replace) {
+    var url = CFG.baseUrl + '?' + filtersToQuery(state.filters);
+    try {
+      if (replace && window.history.replaceState) {
+        window.history.replaceState({ mon: true }, '', url);
+      } else if (window.history.pushState) {
+        window.history.pushState({ mon: true }, '', url);
+      }
+    } catch (e) { /* diabaikan: URL tetap benar di server */ }
+    try { localStorage.setItem(CFG.storageKey, JSON.stringify(state.filters)); } catch (e) {}
+  }
+
+  function readFiltersFromForm() {
+    var f = {};
+    $$('[data-filter]', els.filters || document).forEach(function (el) {
+      var key = el.getAttribute('data-filter');
+      if (el.type === 'checkbox') { return; }
+      f[key] = el.value;
+    });
+    return f;
+  }
+
+  function applyFiltersToForm(f) {
+    $$('[data-filter]', els.filters || document).forEach(function (el) {
+      var key = el.getAttribute('data-filter');
+      var val = f[key];
+      el.value = (val === null || val === undefined) ? '' : String(val);
+    });
+    /* Chip preset rentang waktu */
+    $$('.mon-chip[data-range]').forEach(function (btn) {
+      var active = btn.getAttribute('data-range') === String(f.range || 'periode');
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
+
+  /* --------------------------------------------------------------- fetch */
+
+  function skeleton() {
+    var s = '<div class="mon-skeleton">'
+      + '<div class="mon-skel-line mon-skel-line--md"></div>'
+      + '<div class="mon-skel-line mon-skel-line--sm"></div>'
+      + '<div class="mon-skel-block"></div></div>';
+    if (els.gridBody) { els.gridBody.innerHTML = '<tr><td colspan="9" class="p-3">' + s + '</td></tr>'; }
+    if (els.cards) { els.cards.innerHTML = s; }
+  }
+
+  function toast(msg, isError) {
+    var el = document.createElement('div');
+    el.className = 'mon-toast' + (isError ? ' mon-toast--err' : '');
+    el.setAttribute('role', 'status');
+    el.innerHTML = '<i class="fas ' + (isError ? 'fa-circle-exclamation' : 'fa-circle-check') + '" aria-hidden="true"></i><span>' + esc(msg) + '</span>';
+    document.body.appendChild(el);
+    setTimeout(function () { if (el.parentNode) { el.parentNode.removeChild(el); } }, 4200);
+  }
+
+  function load(opts) {
+    if (state.loading) { return; }
+    state.loading = true;
+    var options = opts || {};
+    if (options.skeleton) { skeleton(); }
+    setLive('syncing', 'Memuat\u2026');
+
+    var url = CFG.dataUrl + '?' + filtersToQuery(state.filters);
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+      .then(function (r) {
+        if (!r.ok) { throw new Error('HTTP ' + r.status); }
+        return r.json();
+      })
+      .then(function (json) {
+        if (!json || !json.ok) { throw new Error((json && json.message) || 'Respons tidak valid'); }
+        state.lastSuccess = Date.now();
+        renderAll(json);
+        setLive('live', 'Live');
+        if (options.toast) { toast(options.toast); }
+      })
+      .catch(function (err) {
+        setLive('offline', 'Offline');
+        toast('Gagal memuat data: ' + err.message, true);
+      })
+      .then(function () { state.loading = false; });
+  }
+
+  /* ---------------------------------------------------------------- render */
+
+  function renderAll(json) {
+    var payload = json.payload || {};
+    var grid = json.grid || {};
+    if (json.filters) {
+      state.filters = json.filters;
+      applyFiltersToForm(state.filters);
+    }
+    renderKpi(payload.kpi || []);
+    renderStacked(payload.stacked || {});
+    renderTrend(payload.trend || {});
+    renderKomposisi(payload.komposisi || {});
+    renderRank(payload.beban || {});
+    renderKendala(payload.kendala || {});
+    renderConsistency(payload.consistency || {});
+    renderMeta(payload.meta || {});
+    renderGrid(grid);
+    renderFilterSummary(payload.meta || {});
+  }
+
+  /* ------------------------------------------------------------ sparkline */
+
+  function sparkline(series, tone) {
+    var data = (series || []).map(Number);
+    if (data.length === 0) { return ''; }
+    if (data.length === 1) { data = [data[0], data[0]]; }
+    var W = 100, H = 30, P = 2;
+    var min = Math.min.apply(null, data);
+    var max = Math.max.apply(null, data);
+    var span = (max - min) || 1;
+    var step = (W - P * 2) / (data.length - 1);
+    var pts = data.map(function (v, i) {
+      var x = P + i * step;
+      var y = H - P - ((v - min) / span) * (H - P * 2);
+      return [Math.round(x * 100) / 100, Math.round(y * 100) / 100];
+    });
+    var line = pts.map(function (p, i) { return (i === 0 ? 'M' : 'L') + p[0] + ' ' + p[1]; }).join(' ');
+    var area = line + ' L' + pts[pts.length - 1][0] + ' ' + (H - 1) + ' L' + pts[0][0] + ' ' + (H - 1) + ' Z';
+    var color = ({ ok: '#15803d', warn: '#b45309', danger: '#b91c1c' })[toneClass(tone)] || '#475569';
+    var last = pts[pts.length - 1];
+
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-hidden="true" focusable="false">'
+      + '<path d="' + area + '" fill="' + color + '" opacity="0.12"></path>'
+      + '<path d="' + line + '" fill="none" stroke="' + color + '" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"></path>'
+      + '<circle cx="' + last[0] + '" cy="' + last[1] + '" r="2.4" fill="' + color + '" stroke="#fff" stroke-width="1"></circle>'
+      + '</svg>';
+  }
+
+  /* ------------------------------------------------------------ Tier 1 KPI */
+
+  function renderKpi(cards) {
+    if (!els.kpiGrid) { return; }
+    if (!cards.length) {
+      els.kpiGrid.innerHTML = '<div class="mon-card mon-card__body mon-empty"><i class="fas fa-chart-simple mon-empty__icon" aria-hidden="true"></i><h3>Belum ada metrik</h3><p>Tidak ada data pada filter yang dipilih.</p></div>';
+      return;
+    }
+    var idx = 0;
+    els.kpiGrid.innerHTML = cards.map(function (c) {
+      var tone = toneClass(c.tone);
+      idx += 1;
+      var rows = (c.detail || []).map(function (d) {
+        return '<div class="mon-tooltip__row"><span>' + esc(d.label) + '</span><b>' + esc(d.value) + '</b></div>';
+      }).join('');
+      return '<div class="mon-kpi mon-kpi--' + tone + '" data-kpi="' + esc(c.key) + '" tabindex="0" role="group" aria-label="' + esc(c.aria) + '">'
+        + '<div class="mon-kpi__top"><span class="mon-kpi__label">' + esc(c.label) + '</span>'
+        + '<i class="fas ' + esc(c.icon) + ' mon-kpi__icon" aria-hidden="true"></i></div>'
+        + '<div class="mon-kpi__value">' + esc(c.value_display) + '<small>' + esc(c.unit) + '</small></div>'
+        + '<div class="mon-kpi__row"><span class="mon-kpi__pct">' + esc(c.pct_display) + '</span>'
+        + '<span class="mon-kpi__delta">&Delta; ' + esc(c.delta_display) + '</span></div>'
+        + '<div class="mon-kpi__spark" aria-hidden="true">' + sparkline(c.series, c.tone) + '</div>'
+        + '<div class="mon-kpi__row">' + toneBadge(c.tone, c.tone_label) + '</div>'
+        + '<div class="mon-kpi__hint">' + esc(c.hint) + '</div>'
+        + '<div class="d-none" id="monKpiDetail' + idx + '">' + rows + '</div>'
+        + '</div>';
+    }).join('');
+
+    $$('.mon-kpi', els.kpiGrid).forEach(function (card) {
+      card.addEventListener('click', function () {
+        var detail = $('#monKpiDetail' + ($$('.mon-kpi', els.kpiGrid).indexOf(card) + 1), els.kpiGrid);
+        if (!detail) { return; }
+        showHtmlTooltip(card, '<div class="mon-tooltip__title">' + esc($('.mon-kpi__label', card).textContent) + '</div>' + detail.innerHTML, true);
+      });
+      card.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); card.click(); }
+      });
+    });
+  }
+
+  /* ---------------------------------------------------- tooltip kontekstual */
+
+  function showHtmlTooltip(anchor, html, keepOpen) {
+    if (!els.tooltip || !anchor) { return; }
+    els.tooltip.innerHTML = html;
+    els.tooltip.setAttribute('data-show', '1');
+    var wrap = anchor.closest('.mon-chart') || anchor.closest('.mon-card__body') || anchor.parentNode;
+    var rect = anchor.getBoundingClientRect();
+    var wrapRect = wrap.getBoundingClientRect();
+    var x = rect.left - wrapRect.left + rect.width / 2;
+    var y = rect.top - wrapRect.top;
+    els.tooltip.style.left = Math.max(4, Math.min(x, wrapRect.width - 8)) + 'px';
+    els.tooltip.style.top = Math.max(0, y - 8) + 'px';
+    els.tooltip.style.transform = 'translate(-50%, -100%)';
+    if (!keepOpen) {
+      clearTimeout(els.tooltip._t);
+      els.tooltip._t = setTimeout(hideTooltip, 2500);
+    }
+  }
+
+  function hideTooltip() {
+    if (els.tooltip) { els.tooltip.setAttribute('data-show', '0'); }
+  }
+
+  /* ------------------------------------------------ stacked progress bar */
+
+  function renderStacked(s) {
+    if (!els.stack) { return; }
+    var target = Math.max(1, Number(s.target || 0));
+    var items = s.items || [];
+    var segs = items.map(function (it) {
+      var w = Math.min(100, Math.max(0, Number(it.pct || 0)));
+      return '<button type="button" class="mon-stack__seg" style="width:' + (w / items.length).toFixed(3) + '%;background:' + esc(it.color) + '"'
+        + ' data-stage="' + esc(it.key) + '" aria-label="' + esc(it.aria) + '" title="' + esc(it.aria) + '"></button>';
+    }).join('');
+
+    els.stack.innerHTML =
+      '<div class="mon-stack__bar" role="img" aria-label="Progres berlapis terhadap target ' + fmtInt(target) + ' ruta">' + segs + '</div>'
+      + '<div class="mon-stack__legend">' + items.map(function (it) {
+        return '<button type="button" class="mon-stack__item" data-stage="' + esc(it.key) + '" aria-label="' + esc(it.aria) + '">'
+          + '<span class="mon-stack__swatch" style="background:' + esc(it.color) + '"></span>'
+          + '<i class="fas ' + esc(it.icon) + '" aria-hidden="true"></i>'
+          + esc(it.label) + ' <b>' + esc(it.n_display) + '</b> <span class="mon-muted">(' + esc(it.pct_display) + ')</span>'
+          + '</button>';
+      }).join('') + '</div>';
+
+    if (els.layer) {
+      els.layer.innerHTML = items.map(function (it) {
+        return '<div class="mon-layer__row">'
+          + '<span class="mon-layer__label"><i class="fas ' + esc(it.icon) + '" style="color:' + esc(it.color) + '" aria-hidden="true"></i>' + esc(it.label) + '</span>'
+          + '<span class="mon-layer__track"><span class="mon-layer__fill" style="width:' + Math.min(100, Number(it.pct || 0)).toFixed(2) + '%;background:' + esc(it.color) + '"></span></span>'
+          + '<span class="mon-layer__val">' + esc(it.n_display) + ' \u00b7 ' + esc(it.pct_display) + '</span>'
+          + '</div>';
+      }).join('');
+    }
+
+    $$('[data-stage]', els.stack).forEach(function (el) {
+      el.addEventListener('click', function () {
+        var stage = el.getAttribute('data-stage');
+        var map = { dok_ada: { status_dokumen: 'ADA' }, transfer_k: { transfer_stage: 'K' }, transfer_kp: { transfer_stage: 'KP' } };
+        crossFilter(map[stage] || {});
+      });
+    });
+  }
+
+  /* -------------------------------------------------- Tier 2: trend chart */
+
+  function niceCeil(v) {
+    if (v <= 0) { return 1; }
+    var base = Math.pow(10, Math.floor(Math.log10(v)));
+    var n = v / base;
+    return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * base;
+  }
+
+  function renderTrend(t) {
+    if (!els.trend) { return; }
+    var labels = t.labels || [];
+    var allSeries = t.series || [];
+    var target = t.target || { label: 'Target', color: '#94a3b8', values: [] };
+
+    if (labels.length === 0) {
+      els.trend.innerHTML = '<div class="mon-empty"><i class="fas fa-chart-area mon-empty__icon" aria-hidden="true"></i><h3>Belum ada aktivitas pada rentang ini</h3><p>Coba pilih preset rentang waktu yang lebih luas atau bersihkan filter.</p><button type="button" class="btn btn-sm btn-outline-secondary" data-reset-filter>Bersihkan Filter</button></div>';
+      if (els.trendLegend) { els.trendLegend.innerHTML = ''; }
+      return;
+    }
+
+    var series = allSeries.filter(function (s) { return !state.seriesHidden[s.key]; });
+    var W = 760, H = 240, M = { l: 48, r: 14, t: 14, b: 28 };
+    var iw = W - M.l - M.r, ih = H - M.t - M.b;
+    var vals = [];
+    series.forEach(function (s) { (s.values || []).forEach(function (v) { vals.push(Number(v) || 0); }); });
+    (target.values || []).forEach(function (v) { vals.push(Number(v) || 0); });
+    var maxV = niceCeil(Math.max.apply(null, vals.concat([1])));
+    var n = labels.length;
+    var px = function (i) { return M.l + (n > 1 ? (i * iw) / (n - 1) : iw / 2); };
+    var py = function (v) { return M.t + ih - ((Number(v) || 0) / maxV) * ih; };
+
+    var svg = ['<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Tren kumulatif dibanding target linear, ' + n + ' titik waktu">'];
+
+    for (var g = 0; g <= 4; g++) {
+      var gv = (maxV / 4) * g;
+      var gy = py(gv);
+      svg.push('<line class="mon-grid-line" x1="' + M.l + '" y1="' + gy.toFixed(1) + '" x2="' + (W - M.r) + '" y2="' + gy.toFixed(1) + '"></line>');
+      svg.push('<text x="' + (M.l - 6) + '" y="' + (gy + 3).toFixed(1) + '" text-anchor="end">' + fmtInt(Math.round(gv)) + '</text>');
+    }
+
+    var stepLabel = Math.max(1, Math.ceil(n / 7));
+    for (var i = 0; i < n; i += stepLabel) {
+      svg.push('<text x="' + px(i).toFixed(1) + '" y="' + (H - 8) + '" text-anchor="middle">' + esc(String(labels[i]).slice(5)) + '</text>');
+    }
+    svg.push('<line class="mon-axis-line" x1="' + M.l + '" y1="' + (M.t + ih) + '" x2="' + (W - M.r) + '" y2="' + (M.t + ih) + '"></line>');
+
+    series.forEach(function (s) {
+      var pts = (s.values || []).map(function (v, j) { return [px(j), py(v)]; });
+      if (pts.length === 0) { return; }
+      var line = pts.map(function (p, j) { return (j === 0 ? 'M' : 'L') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' ');
+      var area = line + ' L' + pts[pts.length - 1][0].toFixed(1) + ' ' + (M.t + ih) + ' L' + pts[0][0].toFixed(1) + ' ' + (M.t + ih) + ' Z';
+      svg.push('<path class="mon-series-area" d="' + area + '" fill="' + esc(s.color) + '"></path>');
+      svg.push('<path class="mon-series-line" d="' + line + '" stroke="' + esc(s.color) + '"></path>');
+    });
+
+    if ((target.values || []).length) {
+      var tline = target.values.map(function (v, j) { return (j === 0 ? 'M' : 'L') + px(j).toFixed(1) + ' ' + py(v).toFixed(1); }).join(' ');
+      svg.push('<path class="mon-target-line" d="' + tline + '"></path>');
+    }
+
+    svg.push('<line class="mon-hover-line" id="monTrendHover" x1="0" y1="' + M.t + '" x2="0" y2="' + (M.t + ih) + '" style="display:none"></line>');
+    svg.push('<rect id="monTrendOverlay" x="' + M.l + '" y="' + M.t + '" width="' + iw + '" height="' + ih + '" fill="transparent" style="cursor:crosshair"></rect>');
+    svg.push('</svg>');
+    els.trend.innerHTML = svg.join('');
+
+    if (els.trendLegend) {
+      els.trendLegend.innerHTML = allSeries.map(function (s) {
+        var hidden = !!state.seriesHidden[s.key];
+        return '<button type="button" class="mon-legend-item" data-series="' + esc(s.key) + '" aria-pressed="' + (hidden ? 'false' : 'true') + '">'
+          + '<span class="mon-legend-swatch" style="background:' + esc(s.color) + '"></span>' + esc(s.label) + '</button>';
+      }).join('') + '<span class="mon-legend-item"><span class="mon-legend-swatch" style="background:' + esc(target.color) + '"></span>' + esc(target.label) + '</span>';
+
+      $$('[data-series]', els.trendLegend).forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var key = btn.getAttribute('data-series');
+          state.seriesHidden[key] = !state.seriesHidden[key];
+          renderTrend(t);
+        });
+      });
+    }
+
+    if (els.trendMeta) {
+      els.trendMeta.textContent = ((t.meta && t.meta.basis) ? t.meta.basis : '') + ' \u00b7 ' + n + ' titik waktu';
+    }
+
+    var overlay = $('#monTrendOverlay', els.trend);
+    var hoverLine = $('#monTrendHover', els.trend);
+    if (!overlay || !hoverLine) { return; }
+
+    overlay.addEventListener('mousemove', function (ev) {
+      var box = overlay.getBoundingClientRect();
+      var ratio = box.width > 0 ? (ev.clientX - box.left) / box.width : 0;
+      var idx = Math.max(0, Math.min(n - 1, Math.round(ratio * (n - 1))));
+      var xPos = px(idx);
+      hoverLine.setAttribute('x1', xPos.toFixed(1));
+      hoverLine.setAttribute('x2', xPos.toFixed(1));
+      hoverLine.style.display = '';
+
+      var daily = (t.daily || [])[idx] || {};
+      var rata = daily.total ? Math.round(((daily.dok_ada || 0) / daily.total) * 100) : 0;
+      var html = '<div class="mon-tooltip__title">' + esc(labels[idx]) + '</div>';
+      allSeries.forEach(function (s) {
+        if (state.seriesHidden[s.key]) { return; }
+        html += '<div class="mon-tooltip__row"><span>' + esc(s.label) + '</span><b>' + fmtInt((s.values || [])[idx]) + '</b></div>';
+      });
+      html += '<div class="mon-tooltip__row"><span>' + esc(target.label) + '</span><b>' + fmtInt((target.values || [])[idx] || 0) + '</b></div>';
+      html += '<div class="mon-tooltip__note">Aktivitas hari itu: ' + fmtInt(daily.total) + ' baris \u00b7 dokumen diterima ' + rata + '% dari aktivitas hari itu</div>';
+
+      showHtmlTooltip(overlay, html, true);
+      var chartBox = els.trend.getBoundingClientRect();
+      var hostBox = els.trend.parentNode.getBoundingClientRect();
+      var scale = chartBox.width / W;
+      els.tooltip.style.left = (chartBox.left - hostBox.left + xPos * scale) + 'px';
+      els.tooltip.style.top = (chartBox.top - hostBox.top + 8) + 'px';
+      els.tooltip.style.transform = 'translate(-50%, 0)';
+    });
+
+    overlay.addEventListener('mouseleave', function () {
+      hoverLine.style.display = 'none';
+      hideTooltip();
+    });
+  }
+
+  /* ------------------------------------------------ Tier 2: donut komposisi */
+
+  function renderKomposisi(k) {
+    if (!els.donut) { return; }
+    var segs = k.segments || [];
+    var total = Number(k.total || 0);
+
+    if (total === 0) {
+      els.donut.innerHTML = '<div class="mon-empty"><i class="fas fa-chart-pie mon-empty__icon" aria-hidden="true"></i><h3>Tidak ada data</h3><p>Tidak ada baris yang cocok dengan filter aktif.</p></div>';
+      if (els.donutLegend) { els.donutLegend.innerHTML = ''; }
+      return;
+    }
+
+    var R = 68, SW = 26, C = 100, CIRC = 2 * Math.PI * R;
+    var acc = 0;
+    var circles = segs.map(function (s) {
+      var len = (Number(s.n) / total) * CIRC;
+      var el = '<circle cx="' + C + '" cy="' + C + '" r="' + R + '" fill="none" stroke="' + esc(s.color) + '" stroke-width="' + SW + '"'
+        + ' stroke-dasharray="' + len.toFixed(2) + ' ' + (CIRC - len).toFixed(2) + '"'
+        + ' stroke-dashoffset="' + (-acc).toFixed(2) + '"'
+        + ' transform="rotate(-90 ' + C + ' ' + C + ')"'
+        + ' data-seg="' + esc(s.key) + '" tabindex="0" role="button"'
+        + ' aria-label="' + esc(s.aria) + '" style="cursor:pointer"></circle>';
+      acc += len;
+      return el;
+    }).join('');
+
+    els.donut.innerHTML = '<svg viewBox="0 0 200 200" role="img" aria-label="Komposisi status untuk ' + fmtInt(total) + ' baris ruta">'
+      + '<circle cx="' + C + '" cy="' + C + '" r="' + R + '" fill="none" stroke="#eef1f6" stroke-width="' + SW + '"></circle>'
+      + circles
+      + '<text x="' + C + '" y="' + (C - 2) + '" text-anchor="middle" style="font-size:26px;font-weight:800;fill:#2e3450">' + fmtInt(total) + '</text>'
+      + '<text x="' + C + '" y="' + (C + 16) + '" text-anchor="middle" style="font-size:11px">baris ruta</text>'
+      + '</svg>';
+
+    if (els.donutLegend) {
+      els.donutLegend.innerHTML = segs.map(function (s) {
+        return '<button type="button" class="mon-legend-item" data-seg="' + esc(s.key) + '" aria-label="' + esc(s.aria) + '">'
+          + '<span class="mon-legend-swatch mon-legend-swatch--dot" style="background:' + esc(s.color) + '"></span>'
+          + '<i class="fas ' + esc(s.icon) + '" aria-hidden="true"></i>'
+          + esc(s.label) + ' \u00b7 <b>' + esc(s.n_display) + '</b> <span class="mon-muted">(' + esc(s.pct_display) + ')</span>'
+          + (Number(s.anomali) > 0 ? ' <span class="mon-muted">\u00b7 ' + fmtInt(s.anomali) + ' kendala</span>' : '')
+          + '</button>';
+      }).join('');
+    }
+
+    var byKey = {};
+    segs.forEach(function (s) { byKey[s.key] = s; });
+
+    $$('[data-seg]', els.donut.parentNode).forEach(function (el) {
+      var seg = byKey[el.getAttribute('data-seg')];
+      if (!seg) { return; }
+      var activate = function () { crossFilter(seg.filter || {}); };
+      el.addEventListener('click', activate);
+      el.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); activate(); }
+      });
+      var show = function (ev) {
+        var html = '<div class="mon-tooltip__title">' + esc(seg.label) + '</div>'
+          + '<div class="mon-tooltip__row"><span>Jumlah</span><b>' + esc(seg.n_display) + ' baris</b></div>'
+          + '<div class="mon-tooltip__row"><span>Porsi</span><b>' + esc(seg.pct_display) + '</b></div>'
+          + '<div class="mon-tooltip__row"><span>Kendala</span><b>' + fmtInt(seg.anomali) + '</b></div>'
+          + '<div class="mon-tooltip__note">Klik untuk memfilter seluruh dashboard ke segmen ini.</div>';
+        showHtmlTooltip(el, html, !!(ev && ev.type === 'focus'));
+      };
+      el.addEventListener('mouseenter', show);
+      el.addEventListener('focus', show);
+      el.addEventListener('mouseleave', hideTooltip);
+      el.addEventListener('blur', hideTooltip);
+    });
+  }
+
+  /* -------------------------------------------- Tier 2: ranking horizontal */
+
+  function renderRank(b) {
+    if (!els.rank) { return; }
+    var items = b.items || [];
+    if (!items.length) {
+      els.rank.innerHTML = '<div class="mon-empty"><i class="fas fa-user-slash mon-empty__icon" aria-hidden="true"></i><h3>Belum ada penugasan pengolah</h3><p>Tidak ada pengolah pada filter yang dipilih.</p></div>';
+      if (els.rankMeta) { els.rankMeta.textContent = ''; }
+      return;
+    }
+
+    els.rank.innerHTML = items.map(function (r) {
+      var tone = toneClass(r.tone);
+      var color = tone === 'ok' ? '#15803d' : tone === 'warn' ? '#d97706' : '#b91c1c';
+      return '<button type="button" class="mon-rank__row" data-pengolah="' + esc(r.orang_id) + '" aria-pressed="false" aria-label="' + esc(r.aria) + '">'
+        + '<span class="mon-rank__pos">' + r.peringkat + '</span>'
+        + '<span class="mon-rank__name" title="' + esc(r.nama) + '">' + esc(r.nama) + '</span>'
+        + '<span class="mon-rank__track"><span class="mon-rank__fill" style="width:' + Math.min(100, Number(r.share_pct || 0)).toFixed(2) + '%;background:' + color + '"></span></span>'
+        + '<span class="mon-rank__val">' + esc(r.total_ruta_display) + ' <small>\u00b7 ' + esc(r.capaian_display) + '</small></span>'
+        + '</button>';
+    }).join('');
+
+    if (els.rankMeta) {
+      els.rankMeta.textContent = items.length + ' pengolah \u00b7 rata-rata ' + fmtInt(b.rata_rata) + ' baris/pengolah'
+        + (Number(b.tanpa_pengolah) > 0 ? ' \u00b7 ' + fmtInt(b.tanpa_pengolah) + ' baris tanpa pengolah' : '');
+    }
+
+    $$('[data-pengolah]', els.rank).forEach(function (row) {
+      var id = Number(row.getAttribute('data-pengolah'));
+      var item = items.filter(function (x) { return Number(x.orang_id) === id; })[0] || {};
+
+      row.addEventListener('click', function () {
+        var isActive = row.getAttribute('aria-pressed') === 'true';
+        $$('[data-pengolah]', els.rank).forEach(function (r2) { r2.setAttribute('aria-pressed', 'false'); });
+        if (isActive) {
+          crossFilter({ pengolah_id: '' });
+        } else {
+          row.setAttribute('aria-pressed', 'true');
+          crossFilter({ pengolah_id: id });
+        }
+      });
+
+      var show = function () {
+        showHtmlTooltip(row, '<div class="mon-tooltip__title">' + esc(item.nama || '') + '</div>'
+          + '<div class="mon-tooltip__row"><span>Beban ruta</span><b>' + fmtInt(item.total_ruta) + '</b></div>'
+          + '<div class="mon-tooltip__row"><span>Jumlah SLS</span><b>' + fmtInt(item.total_sls) + '</b></div>'
+          + '<div class="mon-tooltip__row"><span>Dokumen diterima</span><b>' + fmtInt(item.dok_ada) + '</b></div>'
+          + '<div class="mon-tooltip__row"><span>Transfer K / KP</span><b>' + fmtInt(item.transfer_k) + ' / ' + fmtInt(item.transfer_kp) + '</b></div>'
+          + '<div class="mon-tooltip__row"><span>Kendala</span><b>' + fmtInt(item.anomali) + '</b></div>'
+          + '<div class="mon-tooltip__note">Porsi beban ' + esc(item.share_display || '') + ' \u00b7 capaian ' + esc(item.capaian_display || '') + ' \u00b7 ' + esc(item.tone_label || '') + '</div>', true);
+      };
+      row.addEventListener('mouseenter', show);
+      row.addEventListener('focus', show);
+      row.addEventListener('mouseleave', hideTooltip);
+      row.addEventListener('blur', hideTooltip);
+    });
+  }
+
+  /* -------------------------------------------------------- kendala detail */
+
+  function renderKendala(k) {
+    if (!els.kendala) { return; }
+    var items = (k.items || []).filter(function (i) { return Number(i.n) > 0; });
+    if (!items.length) {
+      els.kendala.innerHTML = '<div class="mon-notice"><i class="fas fa-circle-check" aria-hidden="true" style="color:#15803d"></i> Tidak ada catatan kendala pada filter aktif.</div>';
+      return;
+    }
+    els.kendala.innerHTML = items.map(function (i) {
+      return '<button type="button" class="mon-kendala__row" data-kendala="' + esc(i.key) + '" aria-label="' + esc(i.aria) + '" style="background:none;border:0;padding:0;text-align:left;width:100%">'
+        + '<span class="mon-kendala__label"><i class="fas ' + esc(i.icon) + '" style="color:' + esc(i.color) + '" aria-hidden="true"></i><span>' + esc(i.label) + '</span></span>'
+        + '<span class="mon-kendala__val">' + esc(i.n_display) + '</span>'
+        + '<span class="mon-kendala__track" style="grid-column:1/-1"><span class="mon-kendala__fill" style="width:' + Math.min(100, Number(i.rel || 0)).toFixed(2) + '%;background:' + esc(i.color) + '"></span></span>'
+        + '</button>';
+    }).join('') + '<div class="mon-notice" style="margin-top:.3rem">' + esc(k.note || '') + '</div>';
+
+    $$('[data-kendala]', els.kendala).forEach(function (el) {
+      el.addEventListener('click', function () { crossFilter({ has_error: '1' }); });
+    });
+  }
+
+  /* ------------------------------------- konsistensi angka & metadata header */
+
+  function renderConsistency(c) {
+    if (!els.consistency) { return; }
+    var checks = c.checks || [];
+    var head = c.ok
+      ? '<div class="mon-notice"><i class="fas fa-circle-check" style="color:#15803d" aria-hidden="true"></i> Semua ' + checks.length + ' pemeriksaan konsistensi LULUS \u2014 angka KPI, grafik, dan tabel sinkron.</div>'
+      : '<div class="mon-notice"><i class="fas fa-triangle-exclamation" style="color:#b45309" aria-hidden="true"></i> ' + (Number(c.jumlah_periksa) - Number(c.jumlah_ok)) + ' dari ' + fmtInt(c.jumlah_periksa) + ' pemeriksaan perlu ditinjau.</div>';
+
+    els.consistency.innerHTML = head + '<div class="mon-consistency">' + checks.map(function (r) {
+      return '<div class="mon-consistency__row">'
+        + '<i class="fas ' + esc(r.tone_icon) + ' mon-tone--' + toneClass(r.tone) + '" aria-hidden="true"></i>'
+        + '<span>' + esc(r.label) + '</span>'
+        + '<span>' + fmtInt(r.actual) + ' / ' + fmtInt(r.expected) + '</span>'
+        + '</div>';
+    }).join('') + '</div>';
+  }
+
+  function renderMeta(m) {
+    if (els.stamp) {
+      var t = m.terakhir_aktivitas || m.server_time || '';
+      els.stamp.textContent = 'Diperbarui ' + fmtDate(t) + (m.server_time ? ' \u00b7 ' + String(m.server_time).slice(11) : '');
+    }
+    if (els.meta) {
+      els.meta.innerHTML = '<span class="mon-filter-tag"><i class="fas fa-calendar-check mr-1" aria-hidden="true"></i>' + esc(m.periode_label || '\u2014') + ' (' + esc(m.periode_status || '\u2014') + ')</span>'
+        + '<span class="mon-filter-tag"><i class="fas fa-gauge-high mr-1" aria-hidden="true"></i>Laju target ' + esc(m.target_pace_display || '\u2014') + '</span>'
+        + '<span class="mon-filter-tag"><i class="fas fa-list-check mr-1" aria-hidden="true"></i>' + fmtInt(m.total_filtered) + ' baris ruta</span>'
+        + '<span class="mon-filter-tag"><i class="fas fa-shield-halved mr-1" aria-hidden="true"></i>Audit 24 jam: ' + fmtInt(m.audit_24jam) + '</span>';
+    }
+  }
+})();

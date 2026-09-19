@@ -31,7 +31,7 @@ final class DokumenKirimTest extends TestCase
             $cfg['options']
         );
         $this->pdo->exec('SET FOREIGN_KEY_CHECKS=0');
-        foreach (['peminjaman_dokumen', 'penugasan', 'sampel_ruta', 'sampel', 'periode', 'sls', 'desa', 'kecamatan', 'audit_logs', 'users', 'orang_alias', 'orang', 'roles'] as $t) {
+        foreach (['jadwal_pengawas_pengolahan', 'peminjaman_dokumen', 'penugasan', 'sampel_ruta', 'sampel', 'periode', 'sls', 'desa', 'kecamatan', 'audit_logs', 'users', 'orang_alias', 'orang', 'roles'] as $t) {
             $this->pdo->exec("TRUNCATE TABLE $t");
         }
         $this->pdo->exec('SET FOREIGN_KEY_CHECKS=1');
