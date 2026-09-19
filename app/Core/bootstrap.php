@@ -23,6 +23,8 @@ if ($isDebug) {
     ini_set('display_errors', '0');
     error_reporting(E_ALL & ~E_DEPRECATED);
 }
+ini_set('zlib.output_compression', '1');
+ini_set('zlib.output_compression_level', '6');
 set_exception_handler(function (Throwable $e) use ($isDebug): void {
     Logger::error('Unhandled', ['msg' => $e->getMessage(), 'file' => $e->getFile() . ':' . $e->getLine()]);
     if (!$isDebug) {

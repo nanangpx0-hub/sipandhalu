@@ -161,7 +161,7 @@ $th = static function (string $label, string $key) use ($sort, $dir): string {
         <select id="monPerPage" class="form-control form-control-sm" data-filter="per_page" aria-label="Jumlah baris per halaman">
           <?php foreach ([10, 25, 50, 100] as $pp): ?><option value="<?= $pp ?>" <?= ((int) $f('per_page', 25) === $pp) ? 'selected' : '' ?>><?= $pp ?></option><?php endforeach; ?>
         </select>
-        <span class="mon-muted" id="monGridInfo"></span>
+        <span class="mon-muted" id="monGridInfo"><?= number_format((float) ($g['total'] ?? 0), 0, ',', '.') ?> baris ruta</span>
       </div>
     </div>
     <div class="mon-table-wrap mon-table-wrap--table">
@@ -176,7 +176,37 @@ $th = static function (string $label, string $key) use ($sort, $dir): string {
           <th scope="col">Kendala</th>
           <th scope="col">Aksi</th>
         </tr></thead>
-        <tbody id="monGridBody"></tbody>
+        <tbody id="monGridBody">
+        <?php foreach ($rows as $r): ?>
+          <?php
+            $stage = $r['stage'] ?? [];
+            $stageTone = View::e((string) ($stage['tone'] ?? 'neutral'));
+            $stageIcon = View::e((string) ($stage['icon'] ?? 'fa-circle-info'));
+            $dokCls = ($r['status_dokumen'] ?? '') === 'ADA' ? 'mon-badge-inline--ya' : 'mon-badge-inline--tidak';
+            $kCls = !empty($r['transfer_k']) ? 'mon-badge-inline--ya' : 'mon-badge-inline--tidak';
+            $kpCls = !empty($r['transfer_kp']) ? 'mon-badge-inline--ya' : 'mon-badge-inline--tidak';
+            $serutiCls = !empty($r['transfer_seruti']) ? 'mon-badge-inline--ya' : 'mon-badge-inline--tidak';
+            $kendalaCls = !empty($r['anomali']) ? 'mon-badge-tone--danger' : 'mon-badge-tone--ok';
+            $kendalaIcon = !empty($r['anomali']) ? 'fa-triangle-exclamation' : 'fa-circle-check';
+          ?>
+          <tr data-id="<?= (int) $r['id'] ?>" aria-selected="false">
+            <td><input type="checkbox" class="mon-row-check" data-id="<?= (int) $r['id'] ?>" aria-label="Pilih <?= View::e((string) $r['nks']) ?> <?= View::e((string) $r['ruta_label']) ?>"></td>
+            <td class="mon-sticky"><div class="mon-ident"><b><?= View::e((string) $r['nks']) ?></b><small><?= View::e((string) $r['ruta_label']) ?></small></div></td>
+            <td><div class="mon-ident"><span><?= View::e((string) $r['desa']) ?></span><small class="mon-muted"><?= View::e((string) $r['kecamatan']) ?></small></div></td>
+            <td><div class="mon-ident"><span>PCL: <?= View::e((string) $r['pcl']) ?></span><small class="mon-muted">PML: <?= View::e((string) $r['pml']) ?> | Olah: <?= View::e((string) $r['pengolah']) ?></small></div></td>
+            <td><span class="mon-badge-tone mon-badge-tone--<?= $stageTone ?>"><i class="fas <?= $stageIcon ?>" aria-hidden="true"></i><?= View::e((string) ($stage['label'] ?? '')) ?></span></td>
+            <td><span class="mon-badge-inline <?= $dokCls ?>"><?= View::e((string) ($r['status_dokumen_label'] ?? '')) ?></span></td>
+            <td><span class="mon-badge-inline <?= $kCls ?>"><?= !empty($r['transfer_k']) ? 'Ya' : 'Tdk' ?></span></td>
+            <td><span class="mon-badge-inline <?= $kpCls ?>"><?= !empty($r['transfer_kp']) ? 'Ya' : 'Tdk' ?></span></td>
+            <td><span class="mon-badge-inline <?= $serutiCls ?>"><?= !empty($r['transfer_seruti']) ? 'Ya' : 'Tdk' ?></span></td>
+            <td><span class="mon-badge-tone <?= $kendalaCls ?>"><i class="fas <?= $kendalaIcon ?>" aria-hidden="true"></i><?= View::e((string) ($r['anomali_label'] ?? '')) ?></span></td>
+            <td><div class="mon-actions">
+              <button type="button" class="mon-icon-btn" data-detail-id="<?= (int) $r['id'] ?>" title="Quick View &amp; Riwayat Audit"><i class="fas fa-eye" aria-hidden="true"></i></button>
+              <a href="<?= View::e((string) ($r['detail_url'] ?? '#')) ?>" class="mon-icon-btn" target="_blank" title="Buka di lembar kerja pengolahan"><i class="fas fa-pen-to-square" aria-hidden="true"></i></a>
+            </div></td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
       </table>
     </div>
     <div class="mon-cards" id="monCards" aria-label="Daftar kartu data mobile"></div>

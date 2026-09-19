@@ -215,6 +215,7 @@
   /* ---------------------------------------------------------------- render */
 
   function renderAll(json) {
+    state.lastSuccess = Date.now();
     var payload = json.payload || {};
     var grid = json.grid || {};
     if (json.filters) {
@@ -1453,6 +1454,7 @@
     bindBulkActions();
 
     if (CFG.initialPayload && CFG.initialGrid) {
+      state.lastSuccess = Date.now();
       renderAll({ ok: true, payload: CFG.initialPayload, grid: CFG.initialGrid, filters: state.filters });
     } else {
       load({ skeleton: true });
