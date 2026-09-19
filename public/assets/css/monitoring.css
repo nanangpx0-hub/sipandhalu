@@ -154,14 +154,22 @@
 
 .mon-filters {
   position: sticky;
-  top: 0;
-  z-index: 1030;
+  top: calc(3.5rem + 1px);
+  z-index: 1020;
   background: var(--mon-surface);
   border: 1px solid var(--mon-border);
   border-radius: var(--mon-radius);
   box-shadow: var(--mon-shadow);
   padding: .6rem .75rem;
   margin-bottom: .85rem;
+  transition: opacity .15s ease;
+}
+.mon-filters--loading {
+  opacity: .85;
+}
+.mon-filters--loading select,
+.mon-filters--loading input {
+  cursor: wait;
 }
 .mon-filters__grid {
   display: grid;

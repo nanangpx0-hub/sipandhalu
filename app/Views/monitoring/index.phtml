@@ -23,8 +23,10 @@ $th = static function (string $label, string $key) use ($sort, $dir): string {
     $a = $sort === $key ? ($dir === 'DESC' ? ' <i class="fas fa-sort-down" aria-hidden="true"></i>' : ' <i class="fas fa-sort-up" aria-hidden="true"></i>') : '';
     return '<button type="button" data-sort="' . View::e($key) . '" aria-label="Urutkan ' . View::e($label) . '">' . View::e($label) . $a . '</button>';
 };
+$monCssVer = (string) (@filemtime(dirname(__DIR__, 2) . '/public/assets/css/monitoring.css') ?: time());
+$monJsVer = (string) (@filemtime(dirname(__DIR__, 2) . '/public/assets/js/monitoring.js') ?: time());
 ?>
-<link rel="stylesheet" href="/assets/css/monitoring.css">
+<link rel="stylesheet" href="/assets/css/monitoring.css?v=<?= $monCssVer ?>">
 <div class="mon">
 <a class="mon-skip" href="#monKpi">Lewati ke ringkasan KPI</a>
 <a class="mon-skip" href="#monGrid">Lewati ke tabel operasional</a>
@@ -238,7 +240,7 @@ window.MON_CONFIG = {
 </aside>
 <?= $csrf ?>
 </div>
-<script src="/assets/js/monitoring.js" defer></script>
+<script src="/assets/js/monitoring.js?v=<?= $monJsVer ?>" defer></script>
 <?php require __DIR__ . '/../layouts/footer.phtml'; ?>
 
 

@@ -124,7 +124,8 @@
     Object.keys(f || {}).forEach(function (k) {
       var v = f[k];
       if (v === null || v === undefined || v === '') { return; }
-      if (v === 0 && k !== 'desa_id') { return; }
+      if ((k === 'desa_id' || k === 'pengolah_id' || k === 'pcl_id' || k === 'pml_id') && (v === 0 || v === '0')) { return; }
+      if (v === 0 && k !== 'has_error') { return; }
       q.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
     });
     return q.join('&');
@@ -156,6 +157,9 @@
     $$('[data-filter]', els.filters || document).forEach(function (el) {
       var key = el.getAttribute('data-filter');
       var val = f[key];
+      if ((key === 'desa_id' || key === 'pengolah_id' || key === 'pcl_id' || key === 'pml_id') && (val === 0 || val === '0')) {
+        val = '';
+      }
       el.value = (val === null || val === undefined) ? '' : String(val);
     });
     /* Chip preset rentang waktu */
@@ -163,6 +167,7 @@
       var active = btn.getAttribute('data-range') === String(f.range || 'periode');
       btn.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
+    handleKecamatanChange(f.kec || '');
   }
 
   /* --------------------------------------------------------------- fetch */
@@ -188,6 +193,7 @@
   function load(opts) {
     if (state.loading) { return; }
     state.loading = true;
+    if (els.filters) { els.filters.classList.add('mon-filters--loading'); }
     var options = opts || {};
     if (options.skeleton) { skeleton(); }
     setLive('syncing', 'Memuat\u2026');
@@ -209,7 +215,10 @@
         setLive('offline', 'Offline');
         toast('Gagal memuat data: ' + err.message, true);
       })
-      .then(function () { state.loading = false; });
+      .then(function () {
+        state.loading = false;
+        if (els.filters) { els.filters.classList.remove('mon-filters--loading'); }
+      });
   }
 
   /* ---------------------------------------------------------------- render */
@@ -1316,26 +1325,48 @@
     });
   }
 
+  function initDesaMaster() {
+    var desaSel = $('#fDesa');
+    if (!desaSel) { return; }
+    state.desaMaster = Array.prototype.slice.call(desaSel.options).map(function (opt) {
+      return {
+        value: opt.value,
+        text: opt.textContent,
+        kec: opt.getAttribute('data-kec') || ''
+      };
+    });
+  }
+
   function handleKecamatanChange(kecKode) {
     var desaSel = $('#fDesa');
     if (!desaSel) { return; }
-    var opts = $$('option', desaSel);
+    if (!state.desaMaster || !state.desaMaster.length) {
+      initDesaMaster();
+    }
+    var currentVal = String(state.filters.desa_id || '');
+    if (currentVal === '0') { currentVal = ''; }
     var matchedCurrent = false;
 
-    opts.forEach(function (opt) {
-      if (!opt.value) { return; }
-      var optKec = opt.getAttribute('data-kec');
-      var show = !kecKode || optKec === kecKode;
-      opt.style.display = show ? '' : 'none';
-      if (!show && opt.selected) {
-        opt.selected = false;
-      }
-      if (show && opt.value === String(state.filters.desa_id)) {
-        matchedCurrent = true;
-      }
+    var filtered = (state.desaMaster || []).filter(function (d) {
+      if (!d.value) { return true; }
+      return !kecKode || d.kec === kecKode;
     });
-    if (!matchedCurrent && state.filters.desa_id) {
+
+    desaSel.innerHTML = filtered.map(function (d) {
+      var isSel = (d.value && d.value === currentVal);
+      if (isSel) { matchedCurrent = true; }
+      return '<option value="' + esc(d.value) + '"'
+        + (d.kec ? ' data-kec="' + esc(d.kec) + '"' : '')
+        + (isSel ? ' selected' : '') + '>'
+        + esc(d.text) + '</option>';
+    }).join('');
+
+    if (!matchedCurrent && currentVal !== '') {
       state.filters.desa_id = '';
+      desaSel.value = '';
+    } else if (matchedCurrent) {
+      desaSel.value = currentVal;
+    } else {
       desaSel.value = '';
     }
   }
@@ -1372,6 +1403,7 @@
         dHtml += '<option value="' + d.id + '" data-kec="' + esc(d.kecamatan_kode || '') + '">' + esc(d.nama) + '</option>';
       });
       desaSel.innerHTML = dHtml;
+      initDesaMaster();
     }
     var pengSel = $('#fPengolah');
     var pclSel = $('#fPcl');
@@ -1448,6 +1480,7 @@
 
   function init() {
     cacheEls();
+    initDesaMaster();
     state.filters = CFG.initialFilters || readFiltersFromForm();
     applyFiltersToForm(state.filters);
     bindFilters();
