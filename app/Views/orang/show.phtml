@@ -1,6 +1,8 @@
 <?php
 $title = 'Detail Petugas';
 require __DIR__ . '/../layouts/header.phtml';
+$canEdit = $canEdit ?? true;
+$canManageAlias = $canManageAlias ?? true;
 ?>
 
 <?php
@@ -20,7 +22,9 @@ $rStyle = $roleStyles[$rCode] ?? 'background:#6c757d';
     <?php endif; ?>
   </div>
   <div class="text-nowrap mt-2 mt-sm-0">
+    <?php if ($canEdit): ?>
     <a href="/petugas/<?= (int) $row['id'] ?>/edit" class="btn btn-outline-primary btn-sm mr-1"><i class="fas fa-edit mr-1"></i>Ubah</a>
+    <?php endif; ?>
     <span class="badge badge-<?= ((int) $row['is_aktif'] === 1 ? 'success' : 'secondary') ?> mr-1">
       <?= ((int) $row['is_aktif'] === 1 ? '<i class="fas fa-check mr-1"></i>Aktif' : '<i class="fas fa-ban mr-1"></i>Nonaktif') ?>
     </span>
@@ -51,11 +55,13 @@ $rStyle = $roleStyles[$rCode] ?? 'background:#6c757d';
       <?php foreach ($aliases as $a): ?>
       <li class="list-group-item d-flex justify-content-between align-items-center">
         <span><i class="fas fa-user-tag mr-1 text-muted"></i><?= \App\Core\View::e($a['alias_normalized']) ?></span>
+        <?php if ($canManageAlias): ?>
         <form method="post" action="/petugas/<?= (int) $row['id'] ?>/alias/hapus" style="display:inline">
           <?= $csrf ?>
           <input type="hidden" name="alias_id" value="<?= (int) $a['id'] ?>">
           <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Hapus alias ini?')"><i class="fas fa-trash"></i></button>
         </form>
+        <?php endif; ?>
       </li>
       <?php endforeach; ?>
       <?php if ($aliases === []): ?>
@@ -63,6 +69,7 @@ $rStyle = $roleStyles[$rCode] ?? 'background:#6c757d';
       <?php endif; ?>
     </ul>
 
+    <?php if ($canManageAlias): ?>
     <form method="post" action="/petugas/<?= (int) $row['id'] ?>/alias" class="mt-3">
       <?= $csrf ?>
       <div class="input-group">
@@ -70,6 +77,7 @@ $rStyle = $roleStyles[$rCode] ?? 'background:#6c757d';
         <div class="input-group-append"><button type="submit" class="btn btn-primary"><i class="fas fa-plus mr-1"></i>Tambah</button></div>
       </div>
     </form>
+    <?php endif; ?>
   </div>
 </div>
 

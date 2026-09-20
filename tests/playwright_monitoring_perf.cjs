@@ -33,7 +33,7 @@ async function runBrowserTest(browserChannel, browserName) {
     const t0Login = Date.now();
     await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded' });
     await page.fill('input[name="email"]', 'admin@bpsjember.go.id');
-    await page.fill('input[name="password"]', 'Admin3509!');
+    await page.fill('input[name="password"]', 'Jember3509');
     await Promise.all([
       page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
       page.click('button[type="submit"]')

@@ -169,7 +169,8 @@ final class MonitoringController
                 'detail' => $this->svc->detail($id, $this->currentUser()),
             ]);
         } catch (Throwable $t) {
-            Response::json(['ok' => false, 'message' => $t->getMessage()], 400);
+            $status = $t->getCode() === PengolahanService::HTTP_FORBIDDEN ? 403 : 400;
+            Response::json(['ok' => false, 'message' => $t->getMessage()], $status);
         }
     }
 
@@ -199,7 +200,8 @@ final class MonitoringController
                 'result' => $result,
             ]);
         } catch (Throwable $t) {
-            Response::json(['ok' => false, 'message' => $t->getMessage()], 400);
+            $status = $t->getCode() === PengolahanService::HTTP_FORBIDDEN ? 403 : 400;
+            Response::json(['ok' => false, 'message' => $t->getMessage()], $status);
         }
     }
 

@@ -41,8 +41,11 @@ final class MonitoringService
     /** Kolom yang boleh diubah lewat aksi cepat dashboard. */
     private const QUICK_FIELDS = ['status_dokumen', 'status_transfer_k', 'status_transfer_kp', 'status_transfer_seruti'];
 
-    /** Peran yang boleh melakukan aksi cepat transfer/status dokumen. */
-    public const PENGOLAH_ROLES = ['PENGOLAH', 'OPERATOR', 'PENGAWAS_OLAH', 'SM_PLS', 'ADMIN'];
+    /**
+     * Peran yang boleh melakukan aksi cepat transfer/status dokumen di dashboard.
+     * Disinkronkan dengan PengolahanService::EDIT_ROLES (RBAC LK Pengolahan).
+     */
+    public const PENGOLAH_ROLES = ['ADMIN', 'OPERATOR', 'SM_PLS'];
 
     public function __construct(
         private PDO $pdo,
@@ -1024,10 +1027,10 @@ final class MonitoringService
         ];
     }
 
-    /** Apakah pengguna boleh melakukan aksi cepat pengolahan? */
+    /** Apakah pengguna boleh melakukan aksi cepat pengolahan? (sama dengan RBAC LK) */
     public function canQuickVerify(array $user): bool
     {
-        return in_array((string) ($user['role_code'] ?? 'VIEWER'), self::PENGOLAH_ROLES, true);
+        return $this->pengolahan->canEdit($user);
     }
 
     /** Ringkas perbedaan before/after JSON untuk timeline audit. */
@@ -1153,7 +1156,7 @@ final class MonitoringService
             throw new RuntimeException('Aksi cepat hanya tersedia pada periode AKTIF (status saat ini: ' . ($status === '' ? 'tidak diketahui' : $status) . ').');
         }
         if (!$this->canQuickVerify($user)) {
-            throw new RuntimeException('Aksi cepat pengolahan hanya dapat dilakukan oleh petugas pengolahan.');
+            throw new RuntimeException(PengolahanService::EDIT_DENIED_MESSAGE, PengolahanService::HTTP_FORBIDDEN);
         }
 
         $data = [];
@@ -1229,7 +1232,7 @@ final class MonitoringService
             throw new RuntimeException('Aksi massal hanya tersedia pada periode AKTIF (status saat ini: ' . ($status === '' ? 'tidak diketahui' : $status) . ').');
         }
         if (!$this->canQuickVerify($user)) {
-            throw new RuntimeException('Aksi massal pengolahan hanya dapat dilakukan oleh petugas pengolahan.');
+            throw new RuntimeException(PengolahanService::EDIT_DENIED_MESSAGE, PengolahanService::HTTP_FORBIDDEN);
         }
 
         $actor = $user;

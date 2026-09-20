@@ -1,8 +1,18 @@
-<?php $title = 'Akses Ditolak'; http_response_code(403); require __DIR__ . '/../layouts/header.phtml'; ?>
+<?php
+$title = 'Akses Ditolak';
+http_response_code(403);
+require __DIR__ . '/../layouts/header.phtml';
+
+/** @var string|null $pesan Pesan penolakan spesifik (opsional, diisi controller). */
+$pesan = $pesan ?? null;
+?>
 <div class="error-page my-5">
   <h2 class="headline text-danger">403</h2>
   <div class="error-content">
     <h3><i class="fas fa-ban text-danger"></i> Akses ditolak.</h3>
+    <?php if ($pesan !== null && $pesan !== ''): ?>
+      <p class="text-danger font-weight-bold"><?= \App\Core\View::e($pesan) ?></p>
+    <?php endif; ?>
     <p class="text-muted">Peran Anda tidak diizinkan membuka halaman ini. Hubungi admin jika butuh akses.</p>
     <a href="/" class="btn btn-primary shadow-sm"><i class="fas fa-home mr-1"></i>Kembali ke Dasbor</a>
   </div>

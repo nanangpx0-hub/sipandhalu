@@ -4,6 +4,14 @@ require __DIR__ . '/../layouts/header.phtml';
 
 use App\Core\View;
 
+// ---------------------------------------------------------------- RBAC (view)
+// Read-write hanya untuk ADMIN, OPERATOR, SM_PLS (Tim IPDS).
+// Peran lain (SM_SOSIAL, PML, PCL, PENGOLAH, PENGAWAS_OLAH, VIEWER) = Mode Tinjau.
+$canEdit = (bool) ($canEdit ?? false);
+$roAttr = $canEdit ? '' : ' readonly';
+$disAttr = $canEdit ? '' : ' disabled';
+$roTitle = $canEdit ? '' : ' title="Mode tinjau (read-only): wewenang ubah data khusus Admin & Operator Tim IPDS."';
+
 $totalRuta = (int) ($summary['total_ruta'] ?? 0);
 $dokAda = (int) ($summary['dok_ada'] ?? 0);
 $transferK = (int) ($summary['transfer_k'] ?? 0);
@@ -49,15 +57,17 @@ foreach ($rutaList as $r) {
       </select>
     </form>
 
-    <!-- Tombol Export Excel -->
+    <!-- Tombol Export Excel (tetap aktif untuk semua peran: read-only boleh mengunduh) -->
     <a href="/pengolahan/export?periode_id=<?= $currentPeriodeId ?>" class="btn btn-sm btn-outline-success mr-2">
       <i class="fas fa-file-excel mr-1"></i>Export LK Excel
     </a>
 
-    <!-- Tombol Import Excel -->
-    <button type="button" class="btn btn-sm btn-outline-primary mr-2" data-toggle="modal" data-target="#modalImportLk">
+    <?php if ($canEdit): ?>
+    <!-- Tombol Import Excel — hanya ADMIN / OPERATOR / SM_PLS (Tim IPDS) -->
+    <button type="button" class="btn btn-sm btn-outline-primary mr-2" data-toggle="modal" data-target="#modalImportLk" id="btnImportLk">
       <i class="fas fa-file-upload mr-1"></i>Import LK Excel
     </button>
+    <?php endif; ?>
 
     <!-- Tombol Jadwal Pengawas -->
     <button type="button" class="btn btn-sm btn-outline-warning" data-toggle="modal" data-target="#modalJadwalPengawas">
@@ -68,6 +78,23 @@ foreach ($rutaList as $r) {
 
 <!-- Container Notifikasi AJAX -->
 <div id="ajaxAlertContainer"></div>
+
+<?php if (!$canEdit): ?>
+<!-- Indikator Mode Tinjau (Read-Only) — RBAC LK Pengolahan Sampel -->
+<div class="alert alert-info border-left-info shadow-sm py-2 mb-3" role="status" id="bannerReadOnly" aria-live="polite">
+  <div class="d-flex align-items-start">
+    <i class="fas fa-eye fa-lg mr-2 mt-1" aria-hidden="true"></i>
+    <div>
+      <h6 class="font-weight-bold mb-1">Mode Tinjau (Read-Only)</h6>
+      <p class="mb-0 small">
+        Dokumen ini merupakan hasil serah terima dari Tim Sosial ke Tim IPDS.
+        Hanya <strong>Admin</strong> dan <strong>Operator Tim IPDS</strong> yang memiliki wewenang
+        untuk mengubah status atau catatan pengolahan.
+      </p>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
 
 <?php if (!empty($success)): ?>
   <div class="alert alert-success alert-dismissible fade show py-2 mb-3" role="alert">
@@ -290,6 +317,11 @@ $todayYmd = $todayYmd ?? date('Y-m-d');
 
       <div class="col-md-3 col-sm-6 mb-2 mb-md-0">
         <label class="small text-muted mb-0">Petugas Pengolah Data:</label>
+        <?php if (!empty($isPengolahScope)): ?>
+        <p class="form-control-plaintext form-control-sm font-weight-bold mb-0 py-1"><?= View::e($pengolahList[0]['nama'] ?? 'Data Anda') ?></p>
+        <input type="hidden" name="pengolah_id" value="<?= (int) ($filters['pengolah_id'] ?? 0) ?>">
+        <small class="text-muted">Otomatis menampilkan data binaan Anda.</small>
+        <?php else: ?>
         <select name="pengolah_id" class="form-control form-control-sm">
           <option value="">-- Semua Pengolah (8 Petugas) --</option>
           <?php foreach ($pengolahList as $p): ?>
@@ -298,6 +330,7 @@ $todayYmd = $todayYmd ?? date('Y-m-d');
             </option>
           <?php endforeach; ?>
         </select>
+        <?php endif; ?>
       </div>
 
       <div class="col-md-2 col-sm-6 mb-2 mb-md-0">
@@ -338,12 +371,13 @@ $todayYmd = $todayYmd ?? date('Y-m-d');
       <i class="fas fa-table mr-1 text-primary"></i>Daftar Kuesioner Ruta (<?= count($rutaList) ?> baris)
     </h6>
     <div class="d-flex align-items-center flex-wrap mt-1 mt-md-0">
-      <!-- Tombol Batch Terima Dokumen 1 SLS -->
-      <button class="btn btn-xs btn-outline-primary font-weight-bold shadow-sm mr-2" type="button" data-toggle="modal" data-target="#modalTerimaDokumenBatch">
+      <?php if ($canEdit): ?>
+      <!-- Tombol Batch Terima Dokumen 1 SLS — hanya ADMIN / OPERATOR / SM_PLS -->
+      <button class="btn btn-xs btn-outline-primary font-weight-bold shadow-sm mr-2" type="button" data-toggle="modal" data-target="#modalTerimaDokumenBatch" id="btnTerimaDokumenBatch">
         <i class="fas fa-file-signature mr-1"></i>Terima Dokumen (1 SLS)
       </button>
 
-      <div class="dropdown mr-2">
+      <div class="dropdown mr-2" id="wrapBatchTransfer">
         <button class="btn btn-xs btn-outline-success dropdown-toggle font-weight-bold shadow-sm" type="button" id="dropdownBatchTransfer" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
           <i class="fas fa-paper-plane mr-1"></i>Aksi Transfer Petugas Pengolah
         </button>
@@ -368,6 +402,9 @@ $todayYmd = $todayYmd ?? date('Y-m-d');
         </div>
       </div>
       <small class="text-muted d-none d-lg-inline">Klik checkbox / tombol untuk langsung menyimpan</small>
+      <?php else: ?>
+      <small class="text-muted"><i class="fas fa-eye mr-1" aria-hidden="true"></i>Mode tinjau — perubahan status hanya oleh Admin / Operator Tim IPDS.</small>
+      <?php endif; ?>
     </div>
   </div>
   <div class="card-body p-0">
@@ -384,21 +421,27 @@ $todayYmd = $todayYmd ?? date('Y-m-d');
             <th style="width: 100px;">Dokumen</th>
             <th style="width: 80px;" title="Status Transfer Kuesioner Kor">
               <div>Trf K</div>
+              <?php if ($canEdit): ?>
               <button type="button" class="btn btn-xs btn-outline-success p-0 px-1 btn-batch-header" data-field="status_transfer_k" data-val="1" title="Tandai Semua Transfer K">
                 <i class="fas fa-check-double"></i> All
               </button>
+              <?php endif; ?>
             </th>
             <th style="width: 80px;" title="Status Transfer Kuesioner Konsumsi/Pengeluaran">
               <div>Trf KP</div>
+              <?php if ($canEdit): ?>
               <button type="button" class="btn btn-xs btn-outline-warning p-0 px-1 btn-batch-header" data-field="status_transfer_kp" data-val="1" title="Tandai Semua Transfer KP">
                 <i class="fas fa-check-double"></i> All
               </button>
+              <?php endif; ?>
             </th>
             <th style="width: 80px;" title="Status Transfer Kuesioner Seruti">
               <div>Trf Seruti</div>
+              <?php if ($canEdit): ?>
               <button type="button" class="btn btn-xs btn-outline-secondary p-0 px-1 btn-batch-header" data-field="status_transfer_seruti" data-val="1" title="Tandai Semua Transfer Seruti">
                 <i class="fas fa-check-double"></i> All
               </button>
+              <?php endif; ?>
             </th>
             <th>Catatan & Kendali Mutu</th>
             <th style="width: 80px;">Aksi</th>
@@ -418,7 +461,8 @@ $todayYmd = $todayYmd ?? date('Y-m-d');
               $hasErrorKp = !empty($r['ket_kp_pengolah']);
               $hasErrorM = !empty($r['ket_m_pengolah']);
               $hasUji = !empty($r['uji_petik_pengawas']);
-              $hasNotes = $hasErrorKp || $hasErrorM || $hasUji;
+              $hasIpds = !empty($r['ket_kp_ipds']) || !empty($r['ket_m_ipds']);
+              $hasNotes = $hasErrorKp || $hasErrorM || $hasUji || $hasIpds;
             ?>
             <tr id="row_<?= (int) $r['id'] ?>" class="<?= $hasNotes ? 'table-warning-light' : '' ?>">
               <td class="text-center font-weight-bold text-muted"><?= $idx + 1 ?></td>
@@ -450,15 +494,26 @@ $todayYmd = $todayYmd ?? date('Y-m-d');
                         (!empty($r['ttd_ipds']) ? '<br>Diterima: ' . htmlspecialchars($r['ttd_ipds'], ENT_QUOTES) : '');
                   }
                 ?>
+                <?php if ($canEdit): ?>
                 <button type="button" 
                         class="btn btn-xs font-weight-bold btn-toggle-dok <?= ($r['status_dokumen'] === 'ADA') ? 'btn-info' : 'btn-outline-secondary' ?>"
                         data-id="<?= (int) $r['id'] ?>"
                         data-val="<?= View::e($r['status_dokumen']) ?>"
                         data-toggle="tooltip" data-html="true"
                         title="<?= $dokTitle ?>">
-                  <i class="fas <?= ($r['status_dokumen'] === 'ADA') ? 'fa-check-circle mr-1' : 'fa-times-circle mr-1' ?>"></i>
+                  <i class="fas <?= ($r['status_dokumen'] === 'ADA') ? 'fa-check-circle mr-1' : 'fa-times-circle mr-1' ?>" aria-hidden="true"></i>
                   <?= View::e($r['status_dokumen']) ?>
                 </button>
+                <?php else: ?>
+                <span class="badge <?= ($r['status_dokumen'] === 'ADA') ? 'badge-info' : 'badge-secondary' ?>"
+                      data-toggle="tooltip" data-html="true"
+                      title="<?= $dokTitle ?>"
+                      aria-label="Status dokumen fisik: <?= View::e($r['status_dokumen']) ?> (mode tinjau, tidak dapat diubah)"
+                      style="cursor: default; pointer-events: auto;">
+                  <i class="fas <?= ($r['status_dokumen'] === 'ADA') ? 'fa-check-circle mr-1' : 'fa-times-circle mr-1' ?>" aria-hidden="true"></i>
+                  <?= View::e($r['status_dokumen']) ?>
+                </span>
+                <?php endif; ?>
                 <?php if ($r['status_dokumen'] === 'ADA' && !empty($r['tgl_pengiriman'])): ?>
                   <div class="dok-tgl small text-muted font-italic mt-1" style="font-size: 0.72rem;" title="Tanggal diterima Tim IPDS">
                     <i class="far fa-calendar-alt mr-1 text-info"></i><?= View::e($r['tgl_pengiriman']) ?>
@@ -474,7 +529,7 @@ $todayYmd = $todayYmd ?? date('Y-m-d');
                          id="trfK_<?= (int) $r['id'] ?>" 
                          data-id="<?= (int) $r['id'] ?>" 
                          data-field="status_transfer_k"
-                         <?= !empty($r['status_transfer_k']) ? 'checked' : '' ?>>
+                         <?= !empty($r['status_transfer_k']) ? 'checked' : '' ?><?= $disAttr ?><?= $roTitle ?>>
                   <label class="custom-control-label" for="trfK_<?= (int) $r['id'] ?>"></label>
                 </div>
               </td>
@@ -487,7 +542,7 @@ $todayYmd = $todayYmd ?? date('Y-m-d');
                          id="trfKp_<?= (int) $r['id'] ?>" 
                          data-id="<?= (int) $r['id'] ?>" 
                          data-field="status_transfer_kp"
-                         <?= !empty($r['status_transfer_kp']) ? 'checked' : '' ?>>
+                         <?= !empty($r['status_transfer_kp']) ? 'checked' : '' ?><?= $disAttr ?><?= $roTitle ?>>
                   <label class="custom-control-label" for="trfKp_<?= (int) $r['id'] ?>"></label>
                 </div>
               </td>
@@ -500,7 +555,7 @@ $todayYmd = $todayYmd ?? date('Y-m-d');
                          id="trfSer_<?= (int) $r['id'] ?>" 
                          data-id="<?= (int) $r['id'] ?>" 
                          data-field="status_transfer_seruti"
-                         <?= !empty($r['status_transfer_seruti']) ? 'checked' : '' ?>>
+                         <?= !empty($r['status_transfer_seruti']) ? 'checked' : '' ?><?= $disAttr ?><?= $roTitle ?>>
                   <label class="custom-control-label" for="trfSer_<?= (int) $r['id'] ?>"></label>
                 </div>
               </td>
@@ -534,18 +589,24 @@ $todayYmd = $todayYmd ?? date('Y-m-d');
                   </div>
                 <?php endif; ?>
 
+                <?php if ($hasIpds): ?>
+                  <div>
+                    <span class="badge badge-info mr-1" title="<?= View::e($r['ket_kp_ipds'] ?? $r['ket_m_ipds'] ?? '') ?>"><i class="fas fa-check-double mr-1"></i>IPDS Selesai</span>
+                  </div>
+                <?php endif; ?>
+
                 <?php if (!$hasNotes): ?>
                   <small class="text-muted"><i class="fas fa-check text-success mr-1"></i>Clean (tanpa catatan)</small>
                 <?php endif; ?>
               </td>
 
-              <!-- Tombol Aksi Detail -->
+              <!-- Tombol Aksi Detail (Telaah tetap dapat dibuka semua peran untuk membaca catatan) -->
               <td class="text-center">
                 <button type="button" 
-                        class="btn btn-xs btn-outline-primary btn-detail-catatan"
+                        class="btn btn-xs <?= $canEdit ? 'btn-outline-primary' : 'btn-outline-secondary' ?> btn-detail-catatan"
                         data-json="<?= htmlspecialchars(json_encode($r), ENT_QUOTES, 'UTF-8') ?>"
-                        title="Buka Lembar Telaah Catatan Error">
-                  <i class="fas fa-edit mr-1"></i>Telaah
+                        title="<?= $canEdit ? 'Buka Lembar Telaah Catatan Error' : 'Baca catatan kendala/error (mode tinjau, tidak dapat diubah)' ?>">
+                  <i class="fas <?= $canEdit ? 'fa-edit' : 'fa-eye' ?> mr-1" aria-hidden="true"></i><?= $canEdit ? 'Telaah' : 'Lihat' ?>
                 </button>
               </td>
             </tr>
@@ -563,6 +624,7 @@ $todayYmd = $todayYmd ?? date('Y-m-d');
       <div class="modal-header bg-indigo text-white py-2">
         <h5 class="modal-title h6" id="modalCatatanLabel">
           <i class="fas fa-clipboard-check mr-1"></i>Telaah Catatan Pemeriksaan Kuesioner
+          <?php if (!$canEdit): ?><span class="badge badge-light text-dark ml-1" id="badgeModalReadOnly">Mode Tinjau</span><?php endif; ?>
         </h5>
         <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
           <span aria-hidden="true">&times;</span>
@@ -593,7 +655,7 @@ $todayYmd = $todayYmd ?? date('Y-m-d');
               <div class="row align-items-center">
                 <div class="col-md-3 mb-2 mb-md-0">
                   <label class="font-weight-bold small text-muted mb-1 d-block"><i class="fas fa-file-alt mr-1"></i>Dokumen Fisik:</label>
-                  <select name="status_dokumen" id="m_status_dokumen" class="form-control form-control-sm font-weight-bold">
+                  <select name="status_dokumen" id="m_status_dokumen" class="form-control form-control-sm font-weight-bold"<?= $disAttr ?>>
                     <option value="BELUM">BELUM</option>
                     <option value="ADA">ADA</option>
                   </select>
@@ -601,21 +663,21 @@ $todayYmd = $todayYmd ?? date('Y-m-d');
                 <div class="col-md-3 mb-2 mb-md-0">
                   <label class="font-weight-bold small text-muted mb-1 d-block"><i class="fas fa-paper-plane mr-1 text-success"></i>Transfer K (Kor):</label>
                   <div class="custom-control custom-switch">
-                    <input type="checkbox" class="custom-control-input" id="m_status_transfer_k" name="status_transfer_k" value="1">
+                    <input type="checkbox" class="custom-control-input" id="m_status_transfer_k" name="status_transfer_k" value="1"<?= $disAttr ?>>
                     <label class="custom-control-label font-weight-bold text-success" for="m_status_transfer_k">Sudah Transfer</label>
                   </div>
                 </div>
                 <div class="col-md-3 mb-2 mb-md-0">
                   <label class="font-weight-bold small text-muted mb-1 d-block"><i class="fas fa-paper-plane mr-1 text-warning"></i>Transfer KP:</label>
                   <div class="custom-control custom-switch">
-                    <input type="checkbox" class="custom-control-input" id="m_status_transfer_kp" name="status_transfer_kp" value="1">
+                    <input type="checkbox" class="custom-control-input" id="m_status_transfer_kp" name="status_transfer_kp" value="1"<?= $disAttr ?>>
                     <label class="custom-control-label font-weight-bold text-warning" for="m_status_transfer_kp">Sudah Transfer</label>
                   </div>
                 </div>
                 <div class="col-md-3">
                   <label class="font-weight-bold small text-muted mb-1 d-block"><i class="fas fa-paper-plane mr-1 text-secondary"></i>Transfer Seruti:</label>
                   <div class="custom-control custom-switch">
-                    <input type="checkbox" class="custom-control-input" id="m_status_transfer_seruti" name="status_transfer_seruti" value="1">
+                    <input type="checkbox" class="custom-control-input" id="m_status_transfer_seruti" name="status_transfer_seruti" value="1"<?= $disAttr ?>>
                     <label class="custom-control-label font-weight-bold text-secondary" for="m_status_transfer_seruti">Sudah Transfer</label>
                   </div>
                 </div>
@@ -625,15 +687,15 @@ $todayYmd = $todayYmd ?? date('Y-m-d');
               <div class="row mt-2 pt-2 border-top" id="row_meta_dokumen">
                 <div class="col-md-4 mb-2 mb-md-0">
                   <label class="font-weight-bold small text-muted mb-1 d-block"><i class="far fa-calendar-alt mr-1 text-info"></i>Tgl Terima Dokumen:</label>
-                  <input type="date" name="tgl_pengiriman" id="m_tgl_pengiriman" class="form-control form-control-sm">
+                  <input type="date" name="tgl_pengiriman" id="m_tgl_pengiriman" class="form-control form-control-sm"<?= $roAttr ?>>
                 </div>
                 <div class="col-md-4 mb-2 mb-md-0">
                   <label class="font-weight-bold small text-muted mb-1 d-block"><i class="fas fa-user-check mr-1 text-primary"></i>Diserahkan (Tim Sosial):</label>
-                  <input type="text" name="ttd_sos" id="m_ttd_sos" class="form-control form-control-sm" placeholder="Nama PML (Tim Sosial)">
+                  <input type="text" name="ttd_sos" id="m_ttd_sos" class="form-control form-control-sm" placeholder="Nama PML (Tim Sosial)"<?= $roAttr ?>>
                 </div>
                 <div class="col-md-4">
                   <label class="font-weight-bold small text-muted mb-1 d-block"><i class="fas fa-signature mr-1 text-success"></i>Diterima (Tim IPDS):</label>
-                  <input type="text" name="ttd_ipds" id="m_ttd_ipds" class="form-control form-control-sm" placeholder="Nama Pengolah (Tim IPDS)">
+                  <input type="text" name="ttd_ipds" id="m_ttd_ipds" class="form-control form-control-sm" placeholder="Nama Pengolah (Tim IPDS)"<?= $roAttr ?>>
                 </div>
               </div>
             </div>
@@ -665,21 +727,28 @@ $todayYmd = $todayYmd ?? date('Y-m-d');
                 <label class="font-weight-bold text-danger small mb-1">
                   <i class="fas fa-user-edit mr-1"></i>1. Keterangan / Temuan Error KP oleh Petugas Pengolah:
                 </label>
-                <textarea class="form-control form-control-sm" name="ket_kp_pengolah" id="m_ket_kp_pengolah" rows="3" placeholder="Contoh: Rincian KOR_R603 berkode 1 tetapi R284K6 kosong..."></textarea>
+                <textarea class="form-control form-control-sm" name="ket_kp_pengolah" id="m_ket_kp_pengolah" rows="3" placeholder="Contoh: Rincian KOR_R603 berkode 1 tetapi R284K6 kosong..."<?= $roAttr ?>></textarea>
               </div>
 
               <div class="form-group mb-2">
                 <label class="font-weight-bold text-primary small mb-1">
                   <i class="fas fa-reply mr-1"></i>2. Konfirmasi / Tanggapan Balik Lapangan (PCL / PML):
                 </label>
-                <textarea class="form-control form-control-sm" name="ket_kp_lapangan" id="m_ket_kp_lapangan" rows="2" placeholder="Jawaban konfirmasi dari pencacah atau pengawas lapangan..."></textarea>
+                <textarea class="form-control form-control-sm" name="ket_kp_lapangan" id="m_ket_kp_lapangan" rows="2" placeholder="Jawaban konfirmasi dari pencacah atau pengawas lapangan..."<?= $roAttr ?>></textarea>
               </div>
 
               <div class="form-group mb-2">
                 <label class="font-weight-bold text-success small mb-1">
                   <i class="fas fa-balance-scale mr-1"></i>3. Telaah & Keputusan Tim Statistik Sosial:
                 </label>
-                <textarea class="form-control form-control-sm" name="ket_kp_sosial" id="m_ket_kp_sosial" rows="2" placeholder="Keputusan verifikasi final Subject Matter Statistik Sosial..."></textarea>
+                <textarea class="form-control form-control-sm" name="ket_kp_sosial" id="m_ket_kp_sosial" rows="2" placeholder="Keputusan verifikasi final Subject Matter Statistik Sosial..."<?= $roAttr ?>></textarea>
+              </div>
+
+              <div class="form-group mb-2">
+                <label class="font-weight-bold text-indigo small mb-1">
+                  <i class="fas fa-laptop-code mr-1"></i>4. Telaah & Keputusan Tim IPDS:
+                </label>
+                <textarea class="form-control form-control-sm" name="ket_kp_ipds" id="m_ket_kp_ipds" rows="2" placeholder="Tindak lanjut teknis pengolahan, status override FASIH, atau perbaikan kuesioner oleh Tim IPDS..."<?= $roAttr ?>></textarea>
               </div>
             </div>
 
@@ -689,27 +758,39 @@ $todayYmd = $todayYmd ?? date('Y-m-d');
                 <label class="font-weight-bold text-warning small mb-1">
                   <i class="fas fa-user-edit mr-1"></i>1. Keterangan / Temuan Error Modul oleh Petugas Pengolah:
                 </label>
-                <textarea class="form-control form-control-sm" name="ket_m_pengolah" id="m_ket_m_pengolah" rows="3" placeholder="Contoh: Koordinat lintang error, umur 407 vs status kawin 404..."></textarea>
+                <textarea class="form-control form-control-sm" name="ket_m_pengolah" id="m_ket_m_pengolah" rows="3" placeholder="Contoh: Koordinat lintang error, umur 407 vs status kawin 404..."<?= $roAttr ?>></textarea>
               </div>
 
               <div class="form-group mb-2">
                 <label class="font-weight-bold text-primary small mb-1">
                   <i class="fas fa-reply mr-1"></i>2. Konfirmasi / Tanggapan Balik Lapangan (PCL / PML):
                 </label>
-                <textarea class="form-control form-control-sm" name="ket_m_lapangan" id="m_ket_m_lapangan" rows="2" placeholder="Jawaban konfirmasi lapangan untuk kuesioner modul..."></textarea>
+                <textarea class="form-control form-control-sm" name="ket_m_lapangan" id="m_ket_m_lapangan" rows="2" placeholder="Jawaban konfirmasi lapangan untuk kuesioner modul..."<?= $roAttr ?>></textarea>
               </div>
 
               <div class="form-group mb-2">
                 <label class="font-weight-bold text-success small mb-1">
                   <i class="fas fa-balance-scale mr-1"></i>3. Telaah & Keputusan Tim Statistik Sosial:
                 </label>
-                <textarea class="form-control form-control-sm" name="ket_m_sosial" id="m_ket_m_sosial" rows="2" placeholder="Keputusan verifikasi final modul dari Tim Sosial..."></textarea>
+                <textarea class="form-control form-control-sm" name="ket_m_sosial" id="m_ket_m_sosial" rows="2" placeholder="Keputusan verifikasi final modul dari Tim Sosial..."<?= $roAttr ?>></textarea>
+              </div>
+
+              <div class="form-group mb-2">
+                <label class="font-weight-bold text-indigo small mb-1">
+                  <i class="fas fa-laptop-code mr-1"></i>4. Telaah & Keputusan Tim IPDS:
+                </label>
+                <textarea class="form-control form-control-sm" name="ket_m_ipds" id="m_ket_m_ipds" rows="2" placeholder="Tindak lanjut teknis pengolahan modul oleh Tim IPDS..."<?= $roAttr ?>></textarea>
               </div>
             </div>
 
             <!-- TAB 3: Uji Petik Pengawas Pengolahan -->
             <div class="tab-pane fade" id="tab-uji" role="tabpanel">
-              <?php if ($pengawasHariIni !== null): ?>
+              <?php if (!$canEdit): ?>
+                <div class="alert alert-light border py-2 mb-2 small text-muted">
+                  <i class="fas fa-user-shield mr-1"></i>
+                  Catatan supervisi/uji petik hanya dapat diisi oleh Admin &amp; Operator Tim IPDS (mode tinjau).
+                </div>
+              <?php elseif ($pengawasHariIni !== null): ?>
                 <div class="alert alert-warning py-2 mb-2">
                   <i class="fas fa-user-shield mr-1"></i>
                   Rekomendasi pengawas bertugas hari ini (<?= View::e($todayYmd) ?>):
@@ -727,7 +808,7 @@ $todayYmd = $todayYmd ?? date('Y-m-d');
                 <label class="font-weight-bold text-success small mb-1">
                   <i class="fas fa-microscope mr-1"></i>Catatan Supervisi / Uji Petik Pengawas Pengolahan:
                 </label>
-                <textarea class="form-control form-control-sm" name="uji_petik_pengawas" id="m_uji_petik_pengawas" rows="4" placeholder="Hasil pemeriksaan sampling uji petik kualitas entri/pengolahan..."></textarea>
+                <textarea class="form-control form-control-sm" name="uji_petik_pengawas" id="m_uji_petik_pengawas" rows="4" placeholder="Hasil pemeriksaan sampling uji petik kualitas entri/pengolahan..."<?= $roAttr ?>></textarea>
               </div>
             </div>
           </div>
@@ -735,9 +816,15 @@ $todayYmd = $todayYmd ?? date('Y-m-d');
 
         <div class="modal-footer py-2">
           <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Tutup</button>
+          <?php if ($canEdit): ?>
           <button type="submit" class="btn btn-sm btn-primary" id="btnSimpanCatatan">
             <i class="fas fa-save mr-1"></i>Simpan Perubahan
           </button>
+          <?php else: ?>
+          <span class="text-muted small ml-2" id="noteModalReadOnly">
+            <i class="fas fa-lock mr-1"></i>Read-only — wewenang simpan khusus Admin &amp; Operator Tim IPDS.
+          </span>
+          <?php endif; ?>
         </div>
       </form>
     </div>
@@ -908,6 +995,7 @@ document.addEventListener('DOMContentLoaded', function () {
   'use strict';
 
   var csrfToken = '<?= \App\Core\Csrf::token() ?>';
+  window.CAN_EDIT = <?= $canEdit ? 'true' : 'false' ?>;
   $.ajaxSetup({
     data: { _csrf: csrfToken }
   });
@@ -923,8 +1011,34 @@ document.addEventListener('DOMContentLoaded', function () {
     }, 4000);
   }
 
-  // 1. AJAX Toggle Status Dokumen (ADA / BELUM)
-  $(document).on('click', '.btn-toggle-dok', function () {
+  /** Daftarkan handler delegasi HANYA untuk pengguna berwenang (RBAC read-only). */
+  function onEdit(event, selector, handler) {
+    if (!window.CAN_EDIT) { return; }
+    $(document).on(event, selector, handler);
+  }
+
+  /** Daftarkan handler langsung HANYA untuk pengguna berwenang (RBAC read-only). */
+  function bindEdit(target, event, handler) {
+    if (!window.CAN_EDIT) { return; }
+    $(target).on(event, handler);
+  }
+
+  /** Tolak aksi mutasi dari peran read-only + beri umpan balik (pertahanan berlapis). */
+  function tolakReadOnly() {
+    showNotification('Mode tinjau: hanya Admin & Operator Tim IPDS yang berwenang mengubah data pengolahan.', false);
+  }
+
+  // Pertahanan berlapis: blokir elemen mutasi bila markup dipaksa tampil (mode tinjau).
+  if (!window.CAN_EDIT) {
+    $(document).on('click change submit', '.btn-toggle-dok, .chk-transfer, .btn-batch-action, .btn-batch-header', function (e) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      tolakReadOnly();
+    });
+  }
+
+  // 1. AJAX Toggle Status Dokumen (ADA / BELUM) — hanya editor
+  onEdit('click', '.btn-toggle-dok', function () {
     var btn = $(this);
     var rutaId = btn.data('id');
     var currentVal = btn.data('val');
@@ -971,8 +1085,8 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  // 2. AJAX Checkbox Status Transfer
-  $(document).on('change', '.chk-transfer', function () {
+  // 2. AJAX Checkbox Status Transfer — hanya editor
+  onEdit('change', '.chk-transfer', function () {
     var chk = $(this);
     var rutaId = chk.data('id');
     var field = chk.data('field');
@@ -1025,18 +1139,20 @@ document.addEventListener('DOMContentLoaded', function () {
     $('#m_ket_kp_pengolah').val(data.ket_kp_pengolah || '');
     $('#m_ket_kp_lapangan').val(data.ket_kp_lapangan || '');
     $('#m_ket_kp_sosial').val(data.ket_kp_sosial || '');
+    $('#m_ket_kp_ipds').val(data.ket_kp_ipds || '');
 
     $('#m_ket_m_pengolah').val(data.ket_m_pengolah || '');
     $('#m_ket_m_lapangan').val(data.ket_m_lapangan || '');
     $('#m_ket_m_sosial').val(data.ket_m_sosial || '');
+    $('#m_ket_m_ipds').val(data.ket_m_ipds || '');
 
     $('#m_uji_petik_pengawas').val(data.uji_petik_pengawas || '');
 
     $('#modalCatatan').modal('show');
   });
 
-  // Handler auto-fill tanggal hari ini saat status dokumen diubah jadi ADA di modal
-  $('#m_status_dokumen').on('change', function () {
+  // Handler auto-fill tanggal hari ini saat status dokumen diubah jadi ADA di modal — hanya editor
+  bindEdit('#m_status_dokumen', 'change', function () {
     if ($(this).val() === 'ADA') {
       if (!$('#m_tgl_pengiriman').val()) {
         var today = new Date().toISOString().slice(0, 10);
@@ -1045,9 +1161,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  // Auto-fill nama pengawas bertugas ke textarea Uji Petik
+  // Auto-fill nama pengawas bertugas ke textarea Uji Petik — hanya editor
   var pengawasAktif = <?= json_encode($pengawasHariIni['nama_pengawas'] ?? $pengawasHariIni['orang_nama'] ?? '') ?>;
-  $(document).on('click', '#btnAutofillPengawas', function () {
+  onEdit('click', '#btnAutofillPengawas', function () {
     var cur = $('#m_uji_petik_pengawas').val() || '';
     var prefix = pengawasAktif !== '' ? ('Uji petik oleh ' + pengawasAktif + ' (' + <?= json_encode($todayYmd ?? date('Y-m-d')) ?> + '): ') : '';
     if (cur !== '' && prefix !== '' && cur.indexOf(pengawasAktif) === -1) {
@@ -1058,8 +1174,8 @@ document.addEventListener('DOMContentLoaded', function () {
     $('#m_uji_petik_pengawas').focus();
   });
 
-  // Pilih NKS di Modal Terima Dokumen 1 SLS
-  $('#batch_terima_nks').on('change', function () {
+  // Pilih NKS di Modal Terima Dokumen 1 SLS — hanya editor
+  bindEdit('#batch_terima_nks', 'change', function () {
     var opt = $(this).find('option:selected');
     var pml = opt.data('pml');
     var pengolah = opt.data('pengolah');
@@ -1073,8 +1189,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  // Simpan Form Terima Dokumen 1 SLS
-  $('#formTerimaDokumenBatch').on('submit', function (e) {
+  // Simpan Form Terima Dokumen 1 SLS — hanya editor
+  bindEdit('#formTerimaDokumenBatch', 'submit', function (e) {
     e.preventDefault();
     var btn = $('#btnSubmitBatchTerima');
     btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i>Memproses...');
@@ -1097,8 +1213,8 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  // 4. Simpan Form Modal Catatan
-  $('#formCatatan').on('submit', function (e) {
+  // 4. Simpan Form Modal Catatan — hanya editor
+  bindEdit('#formCatatan', 'submit', function (e) {
     e.preventDefault();
     var btn = $('#btnSimpanCatatan');
     btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i>Menyimpan...');
@@ -1135,8 +1251,8 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  // 5. Batch Transfer Action (All visible rows or header click)
-  $(document).on('click', '.btn-batch-action, .btn-batch-header', function (e) {
+  // 5. Batch Transfer Action (All visible rows or header click) — hanya editor
+  onEdit('click', '.btn-batch-action, .btn-batch-header', function (e) {
     e.preventDefault();
     var btn = $(this);
     var field = btn.data('field');

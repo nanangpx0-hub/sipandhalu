@@ -39,7 +39,10 @@ final class PengolahanTest extends TestCase
             (3,'PML','Pengawas Lapangan'),
             (4,'PCL','Pencacah Lapangan'),
             (5,'PENGOLAH','Pengolah Data'),
-            (19,'PENGAWAS_OLAH','Pengawas Pengolahan')");
+            (19,'PENGAWAS_OLAH','Pengawas Pengolahan'),
+            (20,'SM_SOSIAL','SM Tim Statistik Sosial'),
+            (21,'SM_PLS','SM Tim Pengolahan & Layanan Statistik'),
+            (22,'VIEWER','Viewer')");
 
         $this->pdo->exec("INSERT INTO orang (id, nama, role_id) VALUES
             (1, 'Pengolah Satu', 5),
@@ -50,7 +53,11 @@ final class PengolahanTest extends TestCase
 
         $this->pdo->exec("INSERT INTO users (id, email, password_hash, nama, role_id, orang_id) VALUES 
             (1, 'admin@bps.go.id', 'hash', 'Admin', 1, NULL),
-            (2, 'pengolah1@bps.go.id', 'hash', 'Pengolah Satu', 5, 1)");
+            (2, 'pengolah1@bps.go.id', 'hash', 'Pengolah Satu', 5, 1),
+            (3, 'operator@bps.go.id', 'hash', 'Operator IPDS', 2, NULL),
+            (4, 'smpls@bps.go.id', 'hash', 'SM IPDS', 21, NULL),
+            (5, 'smsosial@bps.go.id', 'hash', 'SM Sosial', 20, NULL),
+            (6, 'viewer@bps.go.id', 'hash', 'Viewer', 22, NULL)");
 
         $this->pdo->exec("INSERT INTO kecamatan (kode, nama) VALUES ('020','GUMUKMAS')");
         $this->pdo->exec("INSERT INTO desa (id, kecamatan_kode, kode, nama) VALUES (1,'020','003','MENAMPU')");
@@ -135,9 +142,10 @@ final class PengolahanTest extends TestCase
         $this->assertSame(1, (int) $shRekap->getCell('E2')->getValue());
     }
 
-    public function testPetugasPengolahanBisaTransferKDanKp(): void
+    public function testOperatorBisaTransferKDanKp(): void
     {
-        $pengolahUser = ['id' => 2, 'role' => 'PENGOLAH', 'orang_id' => 1];
+        // OPERATOR termasuk whitelist EDIT_ROLES (Tim IPDS)
+        $operator = ['id' => 3, 'role_code' => 'OPERATOR', 'orang_id' => null];
         $first = $this->rutaRepo->getBySampelId(1)[0];
         $rutaId = (int) $first['id'];
 
@@ -146,16 +154,177 @@ final class PengolahanTest extends TestCase
             'status_transfer_k' => 1,
             'status_transfer_kp' => 1,
             'status_dokumen' => 'ADA'
-        ], $pengolahUser);
+        ], $operator);
 
         $this->assertSame(1, (int) $res['status_transfer_k']);
         $this->assertSame(1, (int) $res['status_transfer_kp']);
         $this->assertSame('ADA', $res['status_dokumen']);
     }
 
+    public function testSmPlsBisaMengubahStatusPengolahan(): void
+    {
+        $smPls = ['id' => 4, 'role_code' => 'SM_PLS', 'orang_id' => null];
+        $first = $this->rutaRepo->getBySampelId(1)[0];
+
+        $res = $this->svc->updateRuta((int) $first['id'], [
+            'status_dokumen' => 'ADA',
+            'status_transfer_k' => 1,
+        ], $smPls);
+
+        $this->assertSame('ADA', $res['status_dokumen']);
+        $this->assertSame(1, (int) $res['status_transfer_k']);
+    }
+
+    private function tambahBinaanPengolahDua(): void
+    {
+        $this->pdo->exec("INSERT INTO orang (id, nama, role_id) VALUES (4, 'Pengolah Dua', 5)");
+        $this->pdo->exec("INSERT INTO sls (id, desa_id, kec, desa, sls, sub, kode_full, nks, nama_sls) VALUES
+            (2, 1, '020', '003', '0002', '00', '3509020003000200', '50537', 'RT 02 RW 01')");
+        $this->pdo->exec('INSERT INTO sampel (id, periode_id, sls_id, target_sampel) VALUES (2, 1, 2, 10)');
+        $this->pdo->exec('INSERT INTO penugasan (sampel_id, pcl_id, pml_id, pengolah_id) VALUES (2, 2, 3, 4)');
+        $this->rutaRepo->ensureDefaults(2);
+    }
+
+    public function testPengolahOtomatisHanyaDataSendiri(): void
+    {
+        $this->tambahBinaanPengolahDua();
+
+        $milikSatu = $this->svc->getDaftarRuta(1, [], ['role' => 'PENGOLAH', 'orang_id' => 1]);
+        $this->assertCount(10, $milikSatu);
+        foreach ($milikSatu as $r) {
+            $this->assertSame(1, (int) $r['pengolah_id']);
+        }
+
+        // Parameter URL milik orang lain diabaikan (tetap data sendiri)
+        $tamper = $this->svc->getDaftarRuta(1, ['pengolah_id' => 4], ['role' => 'PENGOLAH', 'orang_id' => 1]);
+        $this->assertCount(10, $tamper);
+        $this->assertSame(1, (int) $tamper[0]['pengolah_id']);
+
+        $milikDua = $this->svc->getDaftarRuta(1, [], ['role' => 'PENGOLAH', 'orang_id' => 4]);
+        $this->assertCount(10, $milikDua);
+        $this->assertSame(4, (int) $milikDua[0]['pengolah_id']);
+    }
+
+    public function testPengolahReadOnlyTidakBisaUbahRuta(): void
+    {
+        $this->tambahBinaanPengolahDua();
+        $target = $this->rutaRepo->getBySampelId(1)[0];
+
+        // PENGOLAH kini read-only: mutasi apa pun ditolak dengan kode 403.
+        try {
+            $this->svc->updateRuta((int) $target['id'], ['status_transfer_k' => 1], ['id' => 2, 'role_code' => 'PENGOLAH', 'orang_id' => 1]);
+            $this->fail('PENGOLAH seharusnya ditolak mengubah status pengolahan.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame(403, $e->getCode());
+            $this->assertSame(\App\Services\PengolahanService::EDIT_DENIED_MESSAGE, $e->getMessage());
+        }
+    }
+
+    public function testPclPmlDanSmSosialReadOnly(): void
+    {
+        $first = $this->rutaRepo->getBySampelId(1)[0];
+        $rutaId = (int) $first['id'];
+        $readOnly = [
+            ['id' => 10, 'role_code' => 'PCL', 'orang_id' => 2],
+            ['id' => 11, 'role_code' => 'PML', 'orang_id' => 3],
+            ['id' => 5, 'role_code' => 'SM_SOSIAL', 'orang_id' => null],
+            ['id' => 6, 'role_code' => 'VIEWER', 'orang_id' => null],
+            ['id' => 12, 'role_code' => 'PENGAWAS_OLAH', 'orang_id' => 11],
+        ];
+
+        foreach ($readOnly as $user) {
+            try {
+                $this->svc->updateRuta($rutaId, ['ket_kp_lapangan' => 'Konfirmasi lapangan'], $user);
+                $this->fail($user['role_code'] . ' seharusnya ditolak (read-only).');
+            } catch (\RuntimeException $e) {
+                $this->assertSame(403, $e->getCode(), $user['role_code']);
+                $this->assertSame(\App\Services\PengolahanService::EDIT_DENIED_MESSAGE, $e->getMessage());
+            }
+        }
+
+        // Data tidak berubah setelah percobaan mutasi
+        $after = $this->rutaRepo->findRutaById($rutaId);
+        $this->assertNull($after['ket_kp_lapangan']);
+    }
+
+    public function testCanEditHanyaAdminOperatorSmPls(): void
+    {
+        foreach (['ADMIN', 'OPERATOR', 'SM_PLS'] as $role) {
+            $this->assertTrue($this->svc->canEdit(['role_code' => $role]), $role . ' harus boleh edit');
+        }
+        foreach (['SM_SOSIAL', 'PML', 'PCL', 'PENGOLAH', 'PENGAWAS_OLAH', 'VIEWER', ''] as $role) {
+            $this->assertFalse($this->svc->canEdit(['role_code' => $role]), '"' . $role . '" tidak boleh edit');
+        }
+        // Tanpa role sama sekali → default VIEWER (read-only)
+        $this->assertFalse($this->svc->canEdit([]));
+    }
+
+    public function testNonEditorDitolakBatchTransferDanTerimaDokumen(): void
+    {
+        $pengolah = ['id' => 2, 'role_code' => 'PENGOLAH', 'orang_id' => 1];
+
+        try {
+            $this->svc->batchTransfer([
+                'periode_id' => 1, 'nks' => '50536', 'field' => 'status_transfer_k', 'value' => 1,
+            ], $pengolah);
+            $this->fail('batchTransfer seharusnya ditolak untuk PENGOLAH.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame(403, $e->getCode());
+        }
+
+        try {
+            $this->svc->batchTerimaDokumen(['periode_id' => 1, 'nks' => '50536'], $pengolah);
+            $this->fail('batchTerimaDokumen seharusnya ditolak untuk PENGOLAH.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame(403, $e->getCode());
+        }
+
+        // Pastikan tidak ada perubahan status
+        foreach ($this->rutaRepo->getBySampelId(1) as $r) {
+            $this->assertSame('BELUM', $r['status_dokumen']);
+            $this->assertSame(0, (int) $r['status_transfer_k']);
+        }
+    }
+
+    public function testNonEditorDitolakImportLkExcel(): void
+    {
+        $file = tempnam(sys_get_temp_dir(), 'lk_') . '.xlsx';
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionCode(403);
+        $this->expectExceptionMessage(\App\Services\PengolahanService::EDIT_DENIED_MESSAGE);
+
+        try {
+            $this->svc->importLkExcel(1, $file, ['id' => 6, 'role_code' => 'VIEWER']);
+        } finally {
+            if (is_file($file)) {
+                @unlink($file);
+            }
+        }
+    }
+
+    public function testBatchPengolahHanyaMenyentuhBinaanSendiri(): void
+    {
+        // Kebijakan baru: batchTransfer hanya untuk ADMIN/OPERATOR/SM_PLS (Tim IPDS)
+        // tanpa batasan binaan — operator boleh menyentuh semua NKS pada periode.
+        $this->tambahBinaanPengolahDua();
+        $operator = ['id' => 3, 'role_code' => 'OPERATOR', 'orang_id' => null];
+
+        $count = $this->svc->batchTransfer([
+            'periode_id' => 1, 'nks' => '50537',
+            'field' => 'status_transfer_k', 'value' => 1,
+        ], $operator);
+        $this->assertSame(10, $count);
+
+        $countSendiri = $this->svc->batchTransfer([
+            'periode_id' => 1, 'nks' => '50536',
+            'field' => 'status_transfer_k', 'value' => 1,
+        ], $operator);
+        $this->assertSame(10, $countSendiri);
+    }
+
     public function testBatchTransferOlehPetugasPengolahan(): void
     {
-        $pengolahUser = ['id' => 2, 'role' => 'PENGOLAH', 'orang_id' => 1];
+        $operatorUser = ['id' => 3, 'role_code' => 'OPERATOR', 'orang_id' => null];
 
         // Batch transfer K untuk seluruh ruta di NKS 50536
         $count = $this->svc->batchTransfer([
@@ -163,7 +332,7 @@ final class PengolahanTest extends TestCase
             'nks' => '50536',
             'field' => 'status_transfer_k',
             'value' => 1,
-        ], $pengolahUser);
+        ], $operatorUser);
 
         $this->assertSame(10, $count);
 
@@ -173,7 +342,7 @@ final class PengolahanTest extends TestCase
             'nks' => '50536',
             'field' => 'status_transfer_kp',
             'value' => 1,
-        ], $pengolahUser);
+        ], $operatorUser);
 
         $this->assertSame(10, $countKp);
 
@@ -187,12 +356,12 @@ final class PengolahanTest extends TestCase
 
     public function testNonPengolahDitolakTransferK(): void
     {
-        $pclUser = ['id' => 10, 'role' => 'PCL', 'orang_id' => 2];
+        $pclUser = ['id' => 10, 'role_code' => 'PCL', 'orang_id' => 2];
         $first = $this->rutaRepo->getBySampelId(1)[0];
         $rutaId = (int) $first['id'];
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Transfer K (Kor), Transfer KP, dan status dokumen hanya dapat dilakukan oleh petugas pengolahan.');
+        $this->expectExceptionMessage(\App\Services\PengolahanService::EDIT_DENIED_MESSAGE);
 
         $this->svc->updateRuta($rutaId, [
             'status_transfer_k' => 1
@@ -201,24 +370,24 @@ final class PengolahanTest extends TestCase
 
     public function testAutoFillMetadataPenerimaanDokumenFisik(): void
     {
-        $pengolahUser = ['id' => 2, 'role' => 'PENGOLAH', 'orang_id' => 1, 'nama' => 'Pengolah Satu'];
+        $operatorUser = ['id' => 3, 'role_code' => 'OPERATOR', 'orang_id' => 1, 'nama' => 'Operator IPDS'];
         $first = $this->rutaRepo->getBySampelId(1)[0];
         $rutaId = (int) $first['id'];
 
         // 1. Ubah status dokumen menjadi ADA tanpa mengisi tanggal & ttd
         $res = $this->svc->updateRuta($rutaId, [
             'status_dokumen' => 'ADA'
-        ], $pengolahUser);
+        ], $operatorUser);
 
         $this->assertSame('ADA', $res['status_dokumen']);
         $this->assertSame(date('Y-m-d'), $res['tgl_pengiriman']);
         $this->assertSame('PML Satu (Tim Sosial)', $res['ttd_sos']);
-        $this->assertSame('Pengolah Satu (Tim IPDS)', $res['ttd_ipds']);
+        $this->assertSame('Operator IPDS (Tim IPDS)', $res['ttd_ipds']);
 
         // 2. Ubah kembali status dokumen menjadi BELUM, metadata harus direset
         $resBelum = $this->svc->updateRuta($rutaId, [
             'status_dokumen' => 'BELUM'
-        ], $pengolahUser);
+        ], $operatorUser);
 
         $this->assertSame('BELUM', $resBelum['status_dokumen']);
         $this->assertNull($resBelum['tgl_pengiriman']);
@@ -228,15 +397,15 @@ final class PengolahanTest extends TestCase
 
     public function testBatchTerimaDokumenOlehPetugasPengolahan(): void
     {
-        $pengolahUser = ['id' => 2, 'role' => 'PENGOLAH', 'orang_id' => 1, 'nama' => 'Pengolah Satu'];
+        $operatorUser = ['id' => 3, 'role_code' => 'OPERATOR', 'orang_id' => null, 'nama' => 'Operator IPDS'];
 
         $count = $this->svc->batchTerimaDokumen([
             'periode_id' => 1,
             'nks' => '50536',
             'tgl_pengiriman' => '2026-09-14',
             'ttd_sos' => 'PML Sukses (Tim Sosial)',
-            'ttd_ipds' => 'Pengolah Satu (Tim IPDS)',
-        ], $pengolahUser);
+            'ttd_ipds' => 'Operator IPDS (Tim IPDS)',
+        ], $operatorUser);
 
         $this->assertSame(10, $count);
 
@@ -245,16 +414,16 @@ final class PengolahanTest extends TestCase
             $this->assertSame('ADA', $r['status_dokumen']);
             $this->assertSame('2026-09-14', $r['tgl_pengiriman']);
             $this->assertSame('PML Sukses (Tim Sosial)', $r['ttd_sos']);
-            $this->assertSame('Pengolah Satu (Tim IPDS)', $r['ttd_ipds']);
+            $this->assertSame('Operator IPDS (Tim IPDS)', $r['ttd_ipds']);
         }
     }
 
     public function testNonPengolahDitolakBatchTerimaDokumen(): void
     {
-        $pclUser = ['id' => 10, 'role' => 'PCL', 'orang_id' => 2];
+        $pclUser = ['id' => 10, 'role_code' => 'PCL', 'orang_id' => 2];
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Penerimaan dokumen fisik hanya dapat dilakukan oleh petugas pengolahan.');
+        $this->expectExceptionMessage(\App\Services\PengolahanService::EDIT_DENIED_MESSAGE);
 
         $this->svc->batchTerimaDokumen([
             'periode_id' => 1,
@@ -264,10 +433,10 @@ final class PengolahanTest extends TestCase
 
     public function testExportLkExcelTermasukKolomPenerimaan(): void
     {
-        // Set 1 ruta menjadi ADA
-        $pengolahUser = ['id' => 2, 'role' => 'PENGOLAH', 'orang_id' => 1, 'nama' => 'Pengolah Satu'];
+        // Set 1 ruta menjadi ADA (Tim IPDS: OPERATOR)
+        $operatorUser = ['id' => 3, 'role_code' => 'OPERATOR', 'orang_id' => null, 'nama' => 'Operator IPDS'];
         $first = $this->rutaRepo->getBySampelId(1)[0];
-        $this->svc->updateRuta((int) $first['id'], ['status_dokumen' => 'ADA'], $pengolahUser);
+        $this->svc->updateRuta((int) $first['id'], ['status_dokumen' => 'ADA'], $operatorUser);
 
         $spreadsheet = $this->svc->exportLkExcel(1);
         $shRekap = $spreadsheet->getSheetByName('Rekap');
@@ -280,7 +449,7 @@ final class PengolahanTest extends TestCase
         $this->assertSame('Ada', (string) $shRekap->getCell('F2')->getValue());
         $this->assertSame(date('Y-m-d'), (string) $shRekap->getCell('G2')->getValue());
         $this->assertSame('PML Satu (Tim Sosial)', (string) $shRekap->getCell('H2')->getValue());
-        $this->assertSame('Pengolah Satu (Tim IPDS)', (string) $shRekap->getCell('I2')->getValue());
+        $this->assertSame('Operator IPDS (Tim IPDS)', (string) $shRekap->getCell('I2')->getValue());
     }
 
     public function testJadwalPengawasPerPeriode(): void
@@ -316,6 +485,82 @@ final class PengolahanTest extends TestCase
         $this->assertNull($this->svc->getPengawasHariIni(1, '2026-10-10'));
         // Format salah → NULL
         $this->assertNull($this->svc->getPengawasHariIni(1, '15-09-2026'));
+    }
+
+    public function testUpdateRutaKeputusanIpds(): void
+    {
+        $op = ['id' => 3, 'role_code' => 'OPERATOR', 'orang_id' => null];
+        $first = $this->rutaRepo->getBySampelId(1)[0];
+
+        // Trim + string kosong menjadi NULL
+        $res = $this->svc->updateRuta((int) $first['id'], [
+            'ket_kp_ipds' => '  Override FASIH disetujui Tim IPDS  ',
+            'ket_m_ipds' => '',
+        ], $op);
+        $this->assertSame('Override FASIH disetujui Tim IPDS', $res['ket_kp_ipds']);
+        $this->assertNull($res['ket_m_ipds']);
+
+        $row = $this->rutaRepo->getBySampelId(1)[0];
+        $this->assertSame('Override FASIH disetujui Tim IPDS', $row['ket_kp_ipds']);
+        $this->assertNull($row['ket_m_ipds']);
+    }
+
+    public function testExportImportLkKeputusanIpds(): void
+    {
+        $ss = $this->svc->exportLkExcel(1);
+        $sh = $ss->getSheetByName('Pengolah Satu');
+        $headers = $sh->rangeToArray('A1:P1')[0];
+        $this->assertContains('Keputusan KP (Tim IPDS)', $headers);
+        $this->assertContains('Keputusan M (Tim IPDS)', $headers);
+        $this->assertSame('Keputusan KP (Tim IPDS)', (string) $sh->getCell([8, 1])->getValue());
+        $this->assertSame('Keputusan M (Tim IPDS)', (string) $sh->getCell([12, 1])->getValue());
+
+        // Isi keputusan IPDS ruta 1 lalu round-trip via file
+        $sh->setCellValue([8, 2], 'Override FASIH disetujui');
+        $sh->setCellValue([12, 2], 'Modul diperbaiki IPDS');
+        $file = tempnam(sys_get_temp_dir(), 'lk_ipds_') . '.xlsx';
+        try {
+            (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($ss))->save($file);
+            $res = $this->svc->importLkExcel(1, $file, ['id' => 1, 'role_code' => 'ADMIN']);
+        } finally {
+            if (is_file($file)) {
+                @unlink($file);
+            }
+        }
+        $this->assertGreaterThanOrEqual(1, $res['updated_catatan']);
+        $row = $this->rutaRepo->getBySampelId(1)[0];
+        $this->assertSame('Override FASIH disetujui', $row['ket_kp_ipds']);
+        $this->assertSame('Modul diperbaiki IPDS', $row['ket_m_ipds']);
+    }
+
+    public function testImportLkFormatLamaTanpaIpdsTetapAman(): void
+    {
+        // File lama: kolom 8 = Ket M Pengolah, 11 = Uji Petik (tanpa kolom IPDS).
+        $ss = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $ss->removeSheetByIndex(0);
+        $sh = $ss->createSheet();
+        $sh->setTitle('Pengolah Satu');
+        $sh->fromArray([
+            'No.', 'NKS', 'No. Ruta', 'Status',
+            'Keterangan KP (Pengolah)', 'Keterangan KP (PCL/PML)', 'Keterangan KP (Tim Sosial)',
+            'Keterangan M (Pengolah)', 'Keterangan M (PCL/PML)', 'Keterangan M (Tim Sosial)',
+            'Uji Petik Pengawas Pengolahan', 'PCL', 'PML', 'PENGOLAH',
+        ], null, 'A1');
+        $sh->fromArray([1, '50536', 1, 'BELUM', '', '', '', 'Catatan M lama', '', '', 'Uji lama', '', '', ''], null, 'A2');
+        $file = tempnam(sys_get_temp_dir(), 'lk_old_') . '.xlsx';
+        try {
+            (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($ss))->save($file);
+            $this->svc->importLkExcel(1, $file, ['id' => 1, 'role_code' => 'ADMIN']);
+        } finally {
+            if (is_file($file)) {
+                @unlink($file);
+            }
+        }
+        $row = $this->rutaRepo->getBySampelId(1)[0];
+        $this->assertSame('Catatan M lama', $row['ket_m_pengolah']);
+        $this->assertSame('Uji lama', $row['uji_petik_pengawas']);
+        $this->assertNull($row['ket_kp_ipds']);
+        $this->assertNull($row['ket_m_ipds']);
     }
 
     public function testExportLkExcelMemuatSheetJadwal(): void

@@ -90,11 +90,11 @@ Buka **http://sipandhalu.test**.
 
 | Email | Password | Peran |
 |---|---|---|
-| `admin@bpsjember.go.id` | `Admin3509!` | ADMIN |
-| `pcl.demo@bpsjember.go.id` | `Dummy3509!` | PCL |
-| `pml.demo@bpsjember.go.id` | `Dummy3509!` | PML |
-| `operator.demo@bpsjember.go.id` | `Dummy3509!` | OPERATOR |
-| `viewer.demo@bpsjember.go.id` | `Dummy3509!` | VIEWER |
+| `admin@bpsjember.go.id` | `Jember3509` | ADMIN |
+| `pcl.demo@bpsjember.go.id` | `Jember3509` | PCL |
+| `pml.demo@bpsjember.go.id` | `Jember3509` | PML |
+| `operator.demo@bpsjember.go.id` | `Jember3509` | OPERATOR |
+| `viewer.demo@bpsjember.go.id` | `Jember3509` | VIEWER |
 
 Pengolah asli menggunakan password `Jember3509` dan wajib ganti saat login pertama.
 

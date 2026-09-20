@@ -68,12 +68,12 @@ try {
     $s = $pdo->prepare('SELECT COUNT(*) FROM users WHERE email=:e');
     $s->execute([':e' => 'admin@bpsjember.go.id']);
     if ((int) $s->fetchColumn() === 0) {
-        $ah = password_hash('Admin3509!', PASSWORD_ARGON2ID);
+        $ah = password_hash('Jember3509', PASSWORD_ARGON2ID);
         $pdo->prepare(
             'INSERT INTO users (orang_id, nama, email, password_hash, role_id, is_aktif, must_reset)
              VALUES (NULL,:n,:e,:h,:r,1,1)'
         )->execute([':n' => 'Administrator', ':e' => 'admin@bpsjember.go.id', ':h' => $ah, ':r' => $adminRole]);
-        echo "admin dibuat: admin@bpsjember.go.id / Admin3509! (wajib ganti)\n";
+        echo "admin dibuat: admin@bpsjember.go.id / Jember3509 (wajib ganti)\n";
     } else {
         echo "admin sudah ada, dilewati\n";
     }

@@ -41,6 +41,24 @@ final class PengolahanController
         return $_SESSION['user'] ?? [];
     }
 
+    /**
+     * Petakan kode exception → status HTTP. RuntimeException ber-kode 403 dari
+     * PengolahanService (penolakan RBAC) menjadi HTTP 403, sisanya 400.
+     */
+    private function denyCode(\Throwable $t): int
+    {
+        return $t->getCode() === PengolahanService::HTTP_FORBIDDEN ? 403 : 400;
+    }
+
+    /** Penolakan RBAC untuk endpoint JSON (AJAX). */
+    private function denyJson(): void
+    {
+        Response::json(
+            ['success' => false, 'message' => PengolahanService::EDIT_DENIED_MESSAGE],
+            PengolahanService::HTTP_FORBIDDEN
+        );
+    }
+
     /** GET /pengolahan — Tampilan utama lembar kerja & pemantauan pengolahan sampel. */
     public function index(Request $req, array $params = []): void
     {
@@ -61,27 +79,47 @@ final class PengolahanController
             }
         }
 
+        // PENGOLAH: halaman otomatis menampilkan data binaan sendiri (parameter URL diabaikan).
+        $isPengolahScope = (($user['role_code'] ?? $user['role'] ?? '') === 'PENGOLAH');
+        $ownPengolahId = $isPengolahScope ? (int) ($user['orang_id'] ?? 0) : 0;
+
         $filters = [
             'pengolah_id' => !empty($req->get['pengolah_id']) ? (int) $req->get['pengolah_id'] : null,
             'status_dokumen' => $req->get['status_dokumen'] ?? null,
             'has_error' => $req->get['has_error'] ?? null,
             'q' => $req->get['q'] ?? null,
         ];
+        if ($isPengolahScope) {
+            $filters['pengolah_id'] = $ownPengolahId > 0 ? $ownPengolahId : -1;
+        }
 
-        // Daftar pengolah untuk dropdown filter
-        $stmtPengolah = $this->pdo->prepare(
-            'SELECT DISTINCT o.id, o.nama
-             FROM penugasan pg
-             JOIN sampel sp ON sp.id = pg.sampel_id
-             JOIN orang o ON o.id = pg.pengolah_id
-             WHERE sp.periode_id = :p
-             ORDER BY o.nama ASC'
-        );
-        $stmtPengolah->execute([':p' => $periodeId]);
-        $pengolahList = $stmtPengolah->fetchAll(PDO::FETCH_ASSOC);
+        // Daftar pengolah untuk dropdown filter (PENGOLAH: hanya dirinya)
+        $pengolahList = [];
+        if (!($isPengolahScope && $ownPengolahId <= 0)) {
+            $sqlPengolah = 'SELECT DISTINCT o.id, o.nama
+                 FROM penugasan pg
+                 JOIN sampel sp ON sp.id = pg.sampel_id
+                 JOIN orang o ON o.id = pg.pengolah_id
+                 WHERE sp.periode_id = :p';
+            $paramPengolah = [':p' => $periodeId];
+            if ($isPengolahScope) {
+                $sqlPengolah .= ' AND pg.pengolah_id = :own';
+                $paramPengolah[':own'] = $ownPengolahId;
+            }
+            $stmtPengolah = $this->pdo->prepare($sqlPengolah . ' ORDER BY o.nama ASC');
+            $stmtPengolah->execute($paramPengolah);
+            $pengolahList = $stmtPengolah->fetchAll(PDO::FETCH_ASSOC);
+        }
 
         $rutaList = $this->pengolahanSvc->getDaftarRuta($periodeId, $filters, $user);
         $summary = $this->pengolahanSvc->getSummary($periodeId);
+        if ($isPengolahScope && $ownPengolahId > 0) {
+            // Tabel beban: hanya baris milik sendiri.
+            $summary['beban_pengolah'] = array_values(array_filter(
+                $summary['beban_pengolah'] ?? [],
+                static fn ($bp): bool => (int) ($bp['pengolah_id'] ?? 0) === $ownPengolahId
+            ));
+        }
         $jadwalPengawas = $this->pengolahanSvc->getJadwalPengawas($periodeId);
         $pengawasHariIni = $this->pengolahanSvc->getPengawasHariIni($periodeId);
 
@@ -95,7 +133,10 @@ final class PengolahanController
             'pengawasHariIni' => $pengawasHariIni,
             'todayYmd' => date('Y-m-d'),
             'filters' => $filters,
+            'isPengolahScope' => $isPengolahScope,
             'currentUser' => $user,
+            // RBAC: true hanya untuk ADMIN, OPERATOR, SM_PLS (Tim IPDS).
+            'canEdit' => $this->pengolahanSvc->canEdit($user),
             'csrf' => \App\Core\Csrf::field(),
             'success' => Session::flash('success'),
             'error' => Session::flash('error'),
@@ -106,6 +147,11 @@ final class PengolahanController
     public function updateRuta(Request $req, array $params = []): void
     {
         $user = $this->currentUser();
+        if (!$this->pengolahanSvc->canEdit($user)) {
+            $this->denyJson();
+            return;
+        }
+
         $rutaId = (int) $req->input('ruta_id');
         if ($rutaId <= 0) {
             Response::json(['success' => false, 'message' => 'ID ruta tidak valid.'], 400);
@@ -115,8 +161,8 @@ final class PengolahanController
         $data = [];
         $fields = [
             'status_dokumen', 'status_transfer_k', 'status_transfer_kp', 'status_transfer_seruti',
-            'status_selesai', 'catatan_kp', 'ket_kp_pengolah', 'ket_kp_lapangan', 'ket_kp_sosial',
-            'catatan_modul', 'ket_m_pengolah', 'ket_m_lapangan', 'ket_m_sosial', 'uji_petik_pengawas',
+            'status_selesai', 'catatan_kp', 'ket_kp_pengolah', 'ket_kp_lapangan', 'ket_kp_sosial', 'ket_kp_ipds',
+            'catatan_modul', 'ket_m_pengolah', 'ket_m_lapangan', 'ket_m_sosial', 'ket_m_ipds', 'uji_petik_pengawas',
             'tgl_pengiriman', 'ttd_sos', 'ttd_ipds'
         ];
 
@@ -134,7 +180,7 @@ final class PengolahanController
                 'data' => $updated,
             ]);
         } catch (\Throwable $t) {
-            Response::json(['success' => false, 'message' => $t->getMessage()], 400);
+            Response::json(['success' => false, 'message' => $t->getMessage()], $this->denyCode($t));
         }
     }
 
@@ -142,6 +188,11 @@ final class PengolahanController
     public function batchTransfer(Request $req, array $params = []): void
     {
         $user = $this->currentUser();
+        if (!$this->pengolahanSvc->canEdit($user)) {
+            $this->denyJson();
+            return;
+        }
+
         $user['ip'] = $req->ip();
         $user['user_agent'] = $req->userAgent();
 
@@ -173,7 +224,7 @@ final class PengolahanController
                 'count' => $count
             ]);
         } catch (\Throwable $e) {
-            Response::json(['success' => false, 'message' => $e->getMessage()], 400);
+            Response::json(['success' => false, 'message' => $e->getMessage()], $this->denyCode($e));
         }
     }
 
@@ -181,6 +232,11 @@ final class PengolahanController
     public function terimaDokumen(Request $req, array $params = []): void
     {
         $user = $this->currentUser();
+        if (!$this->pengolahanSvc->canEdit($user)) {
+            $this->denyJson();
+            return;
+        }
+
         $user['ip'] = $req->ip();
         $user['user_agent'] = $req->userAgent();
 
@@ -207,7 +263,7 @@ final class PengolahanController
                 'count' => $count
             ]);
         } catch (\Throwable $e) {
-            Response::json(['success' => false, 'message' => $e->getMessage()], 400);
+            Response::json(['success' => false, 'message' => $e->getMessage()], $this->denyCode($e));
         }
     }
 
@@ -245,6 +301,21 @@ final class PengolahanController
     {
         $user = $this->currentUser();
         $periodeId = (int) $req->input('periode_id');
+
+        // RBAC: impor LK = mutasi massal → hanya ADMIN, OPERATOR, SM_PLS (Tim IPDS).
+        if (!$this->pengolahanSvc->canEdit($user)) {
+            $isAjax = strtolower((string) ($req->server['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
+            if ($isAjax) {
+                $this->denyJson();
+                return;
+            }
+            Response::view('errors/403.phtml', [
+                'pesan' => PengolahanService::EDIT_DENIED_MESSAGE,
+            ], PengolahanService::HTTP_FORBIDDEN);
+
+            return;
+        }
+
         if ($periodeId <= 0) {
             Session::flash('error', 'Periode tidak valid.');
             Response::redirect('/pengolahan');

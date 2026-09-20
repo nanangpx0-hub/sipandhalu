@@ -61,7 +61,7 @@ Browser → public/index.php:5 → app/Core/bootstrap.php:41-43
 | Controller (tipis, tanpa SQL) | `Auth, Dashboard, Orang, User, Sls, Periode, Pengolahan` — `app/Controllers/` |
 | Service (aturan bisnis + transaksi) | `AuthService, UserService, OrangService, SlsService, PenugasanService, DokumenService, DokumenKirimService, PengolahanService` — `app/Services/` |
 | Repository (PDO prepared) | `Orang, User, Audit, Wilayah, Desa, Sls, Periode, Sampel, SampelRuta, Dokumen` — `app/Repositories/` |
-| View | `app/Views/{auth,dashboard,orang,users,sls,periode,pengolahan,layouts,errors}/` (22 file `.phtml`), layout `layouts/header.phtml:89-103` (sidebar: Dasbor, Petugas, SLS, Periode, Pengolahan, Users khusus ADMIN) |
+| View | `app/Views/{auth,dashboard,orang,users,sls,periode,pengolahan,layouts,errors}/` (22 file `.phtml`), layout `layouts/header.phtml` (sidebar: Dasbor, Petugas, SLS, Periode, Pengolahan, Users khusus ADMIN; SLS + Periode disembunyikan untuk PENGOLAH) |
 | Config | `config/app.php:6-12`, `config/database.php`, `config/routes.php` |
 | DB | `database/schema.sql`, `database/migrations/002a-006_*`, `database/migrate.php`, `database/seeds/001-004` |
 | Test | `tests/Tahap1Test.php`, `Tahap2Test.php`, `DokumenTest.php`, `DokumenKirimTest.php`, `PengolahanTest.php`, `ExcelTest.php`, `tests/smoke_tahap1.php` |
@@ -119,16 +119,17 @@ Pindah komputer: lihat `docs/PINDAH-KOMPUTER.md` (jalur clone+seed vs dump/resto
 
 | Email | Password | Peran | Catatan |
 |---|---|---|---|
-| `admin@bpsjember.go.id` | `Admin3509!` | ADMIN | `must_reset=1` → wajib ganti di `/password` |
+| `admin@bpsjember.go.id` | `Jember3509` | ADMIN | `must_reset=1` → wajib ganti di `/password` |
 | 8 email pengolah asli (sheet Rincian) | `Jember3509` | PENGOLAH | `must_reset=1` |
-| `pcl.demo@bpsjember.go.id` | `Dummy3509!` | PCL | langsung masuk |
-| `pml.demo@bpsjember.go.id` | `Dummy3509!` | PML | langsung masuk |
-| `operator.demo@bpsjember.go.id` | `Dummy3509!` | OPERATOR | langsung masuk |
-| `viewer.demo@bpsjember.go.id` | `Dummy3509!` | VIEWER | langsung masuk |
+| `pcl.demo@bpsjember.go.id` | `Jember3509` | PCL | langsung masuk |
+| `pml.demo@bpsjember.go.id` | `Jember3509` | PML | langsung masuk |
+| `operator.demo@bpsjember.go.id` | `Jember3509` | OPERATOR | langsung masuk |
+| `viewer.demo@bpsjember.go.id` | `Jember3509` | VIEWER | langsung masuk |
 
 Alur: `/login` (CSRF, pesan generik, timing dummy) → bila `must_reset` → `/password` (min 8 char, Argon2id + `password_needs_rehash`) → `/` → logout POST (regenerate session).
-HakMenu: sidebar `header.phtml:91-99` — semua login lihat Dasbor/Petugas/SLS/Periode/Pengolahan; `Users` hanya ADMIN.
+HakMenu: sidebar `header.phtml` — semua login lihat Dasbor/Petugas/Pengolahan; `SLS` + `Periode` disembunyikan untuk `PENGOLAH` (server-side 403 via constructor `SlsController`/`PeriodeController`); `/petugas` untuk `PENGOLAH` hanya data sendiri (`OrangController::pengolahScope`); `Users` hanya ADMIN.
 Hak tulis fungsional: transfer/dokumen/LK hanya `PENGOLAH, OPERATOR, PENGAWAS_OLAH, SM_PLS, ADMIN` (`PengolahanService.php:69,152,250`); `PCL/PML` hanya konfirmasi `ket_*_lapangan` di NKS binaannya (`PengolahanService.php:82-87`).
+Cakupan LK: `/pengolahan` untuk `PENGOLAH` otomatis hanya data binaan sendiri — daftar, tabel beban, dropdown (paksa `pengolah_id`, parameter URL diabaikan), tulis satuan (`updateRuta`) + batch (`batchTransfer`, `batchTerimaDokumen`) hanya menyentuh ruta binaannya (`PengolahanService::getDaftarRuta/updateRuta/rutaIdsBinaanSendiri`). Data dummy ruta: `database/seeds/005_dummy_ruta.php` (idempoten, 10 baris/sampel).
 
 ---
 
@@ -172,10 +173,10 @@ Import/export mengikuti template `Data Progress Pengiriman Kuesioner` (sheet `da
 * Header: pilih periode (default AKTIF), Export/Import LK Excel.
 * 6 kartu: total ruta, dok masuk %, transfer K/KP/Seruti, error.
 * Tabel beban 8 pengolah + filter (pengolah/status dok/error/q).
-* Tabel ruta inline: toggle dokumen ADA/BELUM, checkbox Trf K/KP/Seruti (simpan AJAX instan), kolom catatan (Error KP/Modul/Uji Petik), tombol **Telaah** → modal 3 tab (KP, Modul, Uji Petik) dengan 3 level tiap tab: temuan Pengolah → konfirmasi Lapangan (PCL/PML) → keputusan Sosial + switch transfer.
+* Tabel ruta inline: toggle dokumen ADA/BELUM, checkbox Trf K/KP/Seruti (simpan AJAX instan), kolom catatan (Error KP/Modul/Uji Petik + badge `IPDS Selesai`), tombol **Telaah** → modal 3 tab (KP, Modul, Uji Petik) dengan 4 level tiap tab KP/Modul: temuan Pengolah → konfirmasi Lapangan (PCL/PML) → keputusan Sosial → **Telaah & Keputusan Tim IPDS** (`ket_kp_ipds`, `ket_m_ipds`) + switch transfer.
 * Batch: dropdown transfer serentak + tombol `All` per kolom + modal Terima Dokumen 1 SLS.
-* Export multi-sheet (`Alokasi, Rekap, Jadwal Pengawas, <1 sheet per pengolah>`); import sinkronkan status + catatan (`importLkExcel:475-668`, dukung 2 varian kolom Rekap).
-* Skema: `006_lk_pengolahan.sql` (11 kolom: `status_dokumen, transfer_k/kp/seruti, ket_kp_*, ket_m_*, uji_petik`).
+* Export multi-sheet (`Alokasi, Rekap, Jadwal Pengawas, <1 sheet per pengolah>`); sheet pengolah memuat kolom `Keputusan KP (Tim IPDS)` + `Keputusan M (Tim IPDS)`; import sinkronkan status + catatan (dukung 2 varian kolom Rekap + 2 varian kolom IPDS via deteksi header, file lama tetap aman).
+* Skema: `006_lk_pengolahan.sql` (11 kolom: `status_dokumen, transfer_k/kp/seruti, ket_kp_*, ket_m_*, uji_petik`) + `009_telaah_ipds.sql` (`ket_kp_ipds` setelah `ket_kp_sosial`, `ket_m_ipds` setelah `ket_m_sosial`).
 
 ---
 

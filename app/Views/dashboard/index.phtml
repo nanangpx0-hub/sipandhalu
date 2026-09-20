@@ -33,6 +33,7 @@ require __DIR__ . '/../layouts/header.phtml';
       </div>
     </div>
   </div>
+  <?php if (($user['role_code'] ?? '') !== 'PENGOLAH'): ?>
   <div class="col-12 col-md-6 col-xl-3">
     <div class="info-box shadow-sm mb-3">
       <span class="info-box-icon bg-teal"><i class="fas fa-map-marked-alt"></i></span>
@@ -53,6 +54,7 @@ require __DIR__ . '/../layouts/header.phtml';
       </div>
     </div>
   </div>
+  <?php endif; ?>
 </div>
 
 <?php

@@ -15,7 +15,7 @@ async function runTest(channelName) {
   // 1. Login
   await page.goto(`${BASE_URL}/login`);
   await page.fill('input[name="email"]', 'admin@bpsjember.go.id');
-  await page.fill('input[name="password"]', 'Admin3509!');
+  await page.fill('input[name="password"]', 'Jember3509');
   await Promise.all([
     page.waitForNavigation(),
     page.click('button[type="submit"]')

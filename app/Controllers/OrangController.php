@@ -25,14 +25,91 @@ final class OrangController
         $this->svc = new OrangService($pdo, $this->repo, new AuditRepository($pdo));
     }
 
-    private function actor(): ?int
+    private function currentUser(): array
     {
         Session::start();
-        return isset($_SESSION['user']['id']) ? (int) $_SESSION['user']['id'] : null;
+        return $_SESSION['user'] ?? [];
+    }
+
+    private function actor(): ?int
+    {
+        $u = $this->currentUser();
+        return isset($u['id']) ? (int) $u['id'] : null;
+    }
+
+    /**
+     * Cakupan PENGOLAH di menu Petugas: hanya data sendiri (users.orang_id).
+     * @return array{restricted:bool,ownId:?int} restricted=false → peran lain, perilaku lama.
+     */
+    private function pengolahScope(): array
+    {
+        $u = $this->currentUser();
+        if (($u['role_code'] ?? '') !== 'PENGOLAH') {
+            return ['restricted' => false, 'ownId' => null];
+        }
+        $oid = $u['orang_id'] ?? null;
+        return ['restricted' => true, 'ownId' => $oid === null ? null : (int) $oid];
+    }
+
+    private function deny403(): void
+    {
+        http_response_code(403);
+        require dirname(__DIR__) . '/Views/errors/403.phtml';
+        exit;
+    }
+
+    /** PENGOLAH tanpa tautan orang → kembali ke dasbor dgn pesan. */
+    private function unlinkedRedirect(): void
+    {
+        Session::flash('error', 'Akun Anda belum ditautkan ke data petugas. Hubungi admin.');
+        Response::redirect('/');
+    }
+
+    /** Wajib id milik sendiri bila PENGOLAH; selain itu 403. */
+    private function requireSelf(int $id): int
+    {
+        $scope = $this->pengolahScope();
+        if (!$scope['restricted']) {
+            return $id;
+        }
+        if ($scope['ownId'] === null || $id !== $scope['ownId']) {
+            $this->deny403();
+        }
+        return $scope['ownId'];
+    }
+
+    /** Aksi tulis massal / tambah baru: tertutup untuk PENGOLAH. */
+    private function denyPengolahWrite(): void
+    {
+        if ($this->pengolahScope()['restricted']) {
+            $this->deny403();
+        }
     }
 
     public function index(Request $req, array $params = []): void
     {
+        $scope = $this->pengolahScope();
+        if ($scope['restricted']) {
+            // PENGOLAH: daftar hanya berisi data dirinya (filter diabaikan).
+            if ($scope['ownId'] === null) {
+                $this->unlinkedRedirect();
+            }
+            $own = $this->repo->findScoped($scope['ownId']);
+            if ($own === null) {
+                $this->unlinkedRedirect();
+            }
+            Response::view('orang/index.phtml', [
+                'rows' => [$own],
+                'total' => 1,
+                'roles' => $this->repo->roles(),
+                'rekap' => [],
+                'q' => '', 'role' => 'all', 'status' => 'all', 'page' => 1, 'perPage' => 15,
+                'selfOnly' => true,
+                'success' => Session::flash('success'),
+                'error' => Session::flash('error'),
+                'import_errors' => [],
+            ]);
+        }
         $q = (string) ($req->get['q'] ?? '');
         $role = (string) ($req->get['role'] ?? 'all');
         $status = (string) ($req->get['status'] ?? 'all');
@@ -45,6 +122,7 @@ final class OrangController
             'roles' => $this->repo->roles(),
             'rekap' => $this->repo->countByRole(),
             'q' => $q, 'role' => $role, 'status' => $status, 'page' => $page, 'perPage' => $perPage,
+            'selfOnly' => false,
             'success' => Session::flash('success'),
             'error' => Session::flash('error'),
             'import_errors' => Session::flash('import_errors') ?? [],
@@ -54,11 +132,22 @@ final class OrangController
     /** GET /petugas/export — unduh xlsx semua petugas (mengikuti filter aktif). */
     public function exportExcel(Request $req, array $params = []): void
     {
-        $q = (string) ($req->get['q'] ?? '');
-        $role = (string) ($req->get['role'] ?? 'all');
-        $status = (string) ($req->get['status'] ?? 'all');
+        $scope = $this->pengolahScope();
+        if ($scope['restricted']) {
+            // PENGOLAH: ekspor hanya data dirinya.
+            if ($scope['ownId'] === null) {
+                $this->unlinkedRedirect();
+            }
+            $own = $this->repo->findScoped($scope['ownId']);
+            $list = $own === null ? [] : [$own];
+        } else {
+            $q = (string) ($req->get['q'] ?? '');
+            $role = (string) ($req->get['role'] ?? 'all');
+            $status = (string) ($req->get['status'] ?? 'all');
+            $list = $this->repo->exportAll($q, $status, $role);
+        }
         $rows = [];
-        foreach ($this->repo->exportAll($q, $status, $role) as $r) {
+        foreach ($list as $r) {
             $rows[] = [
                 $r['nama'],
                 (string) ($r['role_label'] ?? ($r['role_code'] ?? '—')),
@@ -80,6 +169,7 @@ final class OrangController
     /** GET /petugas/template — unduh template impor. */
     public function templateExcel(Request $req, array $params = []): void
     {
+        $this->denyPengolahWrite();
         Excel::download(
             'template_petugas.xlsx',
             ['Nama', 'Level', 'No HP', 'Email', 'Alamat', 'Status'],
@@ -103,6 +193,7 @@ final class OrangController
     /** POST /petugas/import — impor petugas dari file Excel. */
     public function importExcel(Request $req, array $params = []): void
     {
+        $this->denyPengolahWrite();
         $cek = Excel::cekUpload();
         if ($cek !== null) {
             Session::flash('error', $cek);
@@ -193,6 +284,7 @@ final class OrangController
 
     public function create(Request $req, array $params = []): void
     {
+        $this->denyPengolahWrite();
         Response::view('orang/form.phtml', [
             'mode' => 'create', 'row' => Session::flash('old') ?? [],
             'roles' => $this->repo->roles(),
@@ -203,6 +295,7 @@ final class OrangController
 
     public function store(Request $req, array $params = []): void
     {
+        $this->denyPengolahWrite();
         $in = [
             'nama' => $req->post['nama'] ?? '',
             'role_id' => !empty($req->post['role_id']) ? (int) $req->post['role_id'] : null,
@@ -224,15 +317,19 @@ final class OrangController
     public function show(Request $req, array $params = []): void
     {
         $id = (int) ($params['id'] ?? 0);
+        $this->requireSelf($id);
         $row = $this->repo->find($id);
         if ($row === null) {
             http_response_code(404);
             require dirname(__DIR__) . '/Views/errors/404.phtml';
             exit;
         }
+        $scope = $this->pengolahScope();
         Response::view('orang/show.phtml', [
             'row' => $row,
             'aliases' => $this->repo->aliases($id),
+            'canEdit' => true,
+            'canManageAlias' => !$scope['restricted'],
             'success' => Session::flash('success'),
             'error' => Session::flash('error'),
             'csrf' => \App\Core\Csrf::field(),
@@ -242,16 +339,33 @@ final class OrangController
     public function edit(Request $req, array $params = []): void
     {
         $id = (int) ($params['id'] ?? 0);
+        $this->requireSelf($id);
         $row = $this->repo->find($id);
         if ($row === null) {
             http_response_code(404);
             require dirname(__DIR__) . '/Views/errors/404.phtml';
             exit;
         }
+        $scope = $this->pengolahScope();
+        $roles = $this->repo->roles();
+        $lockedRoleLabel = null;
+        if ($scope['restricted']) {
+            // Baris orang pengolah umumnya tanpa role_id (peran ada di tabel users),
+            // jadi tampilkan label peran milik akunnya sebagai info terkunci.
+            $myCode = (string) ($this->currentUser()['role_code'] ?? '');
+            foreach ($roles as $ro) {
+                if (($ro['code'] ?? '') === $myCode) {
+                    $lockedRoleLabel = (string) $ro['label'];
+                    break;
+                }
+            }
+        }
         Response::view('orang/form.phtml', [
             'mode' => 'edit', 'id' => $id,
             'row' => Session::flash('old') ?? $row,
-            'roles' => $this->repo->roles(),
+            'roles' => $roles,
+            'lockFields' => $scope['restricted'],
+            'lockedRoleLabel' => $lockedRoleLabel,
             'errors' => Session::flash('errors') ?? [],
             'csrf' => \App\Core\Csrf::field(),
         ]);
@@ -260,14 +374,34 @@ final class OrangController
     public function update(Request $req, array $params = []): void
     {
         $id = (int) ($params['id'] ?? 0);
-        $in = [
-            'nama' => $req->post['nama'] ?? '',
-            'role_id' => !empty($req->post['role_id']) ? (int) $req->post['role_id'] : null,
-            'no_hp' => $req->post['no_hp'] ?? '',
-            'email' => $req->post['email'] ?? '',
-            'alamat' => $req->post['alamat'] ?? '',
-            'is_aktif' => isset($req->post['is_aktif']) ? 1 : 0,
-        ];
+        $this->requireSelf($id);
+        $scope = $this->pengolahScope();
+        if ($scope['restricted']) {
+            // PENGOLAH hanya boleh ubah biodata sendiri; level/peran + status dikunci.
+            $row = $this->repo->find($id);
+            if ($row === null) {
+                http_response_code(404);
+                require dirname(__DIR__) . '/Views/errors/404.phtml';
+                exit;
+            }
+            $in = [
+                'nama' => $req->post['nama'] ?? '',
+                'no_hp' => $req->post['no_hp'] ?? '',
+                'email' => $req->post['email'] ?? '',
+                'alamat' => $req->post['alamat'] ?? '',
+                'role_id' => !empty($row['role_id']) ? (int) $row['role_id'] : null,
+                'is_aktif' => (int) $row['is_aktif'],
+            ];
+        } else {
+            $in = [
+                'nama' => $req->post['nama'] ?? '',
+                'role_id' => !empty($req->post['role_id']) ? (int) $req->post['role_id'] : null,
+                'no_hp' => $req->post['no_hp'] ?? '',
+                'email' => $req->post['email'] ?? '',
+                'alamat' => $req->post['alamat'] ?? '',
+                'is_aktif' => isset($req->post['is_aktif']) ? 1 : 0,
+            ];
+        }
         $res = $this->svc->update($id, $in, $this->actor(), $req->ip(), $req->userAgent());
         if (!$res['ok']) {
             Session::flash('errors', $res['errors']);
@@ -280,6 +414,8 @@ final class OrangController
 
     public function toggle(Request $req, array $params = []): void
     {
+        // Status aktif/nonaktif hanya wewenang ADMIN/OPERATOR — bukan "edit data diri".
+        $this->denyPengolahWrite();
         $id = (int) ($params['id'] ?? 0);
         $row = $this->repo->find($id);
         if ($row === null) {
@@ -293,6 +429,8 @@ final class OrangController
 
     public function addAlias(Request $req, array $params = []): void
     {
+        // Kelola alias hanya wewenang ADMIN/OPERATOR (berdampak global ke pencocokan nama).
+        $this->denyPengolahWrite();
         $id = (int) ($params['id'] ?? 0);
         $res = $this->svc->addAlias($id, (string) ($req->post['alias'] ?? ''), $this->actor(), $req->ip(), $req->userAgent());
         if (!$res['ok']) {
@@ -305,6 +443,7 @@ final class OrangController
 
     public function deleteAlias(Request $req, array $params = []): void
     {
+        $this->denyPengolahWrite();
         $id = (int) ($params['id'] ?? 0);
         $aliasId = (int) ($req->post['alias_id'] ?? 0);
         $this->repo->deleteAlias($aliasId);

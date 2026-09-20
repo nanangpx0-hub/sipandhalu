@@ -117,8 +117,8 @@ Buka browser: **http://localhost:8091/login**
 
 | Email | Password | Untuk |
 |---|---|---|
-| `pcl.demo@bpsjember.go.id` | `Dummy3509!` | coba cepat, langsung masuk |
-| `admin@bpsjember.go.id` | `Admin3509!` | admin (wajib ganti password saat login pertama) |
+| `pcl.demo@bpsjember.go.id` | `Jember3509` | coba cepat, langsung masuk |
+| `admin@bpsjember.go.id` | `Jember3509` | admin (wajib ganti password saat login pertama) |
 
 Daftar akun lengkap ada di `README.md` bagian **Akun Demo**.
 

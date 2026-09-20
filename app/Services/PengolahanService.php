@@ -18,11 +18,47 @@ use RuntimeException;
 
 final class PengolahanService
 {
+    /**
+     * Peran yang berhak mengubah data/status pengolahan (read-write).
+     * ADMIN + OPERATOR + SM_PLS (Subject Matter Tim IPDS / Pengolahan & Layanan Statistik).
+     *
+     * @var array<int,string>
+     */
+    public const EDIT_ROLES = ['ADMIN', 'OPERATOR', 'SM_PLS'];
+
+    /** Pesan penolakan standar (dipakai service & controller agar konsisten). */
+    public const EDIT_DENIED_MESSAGE = 'Akses ditolak: Anda tidak memiliki wewenang untuk mengubah data atau status pengolahan dokumen. Wewenang ini khusus Admin dan Operator Tim IPDS.';
+
+    /** Kode status HTTP untuk penolakan wewenang (dipetakan controller → 403 Forbidden). */
+    public const HTTP_FORBIDDEN = 403;
+
     public function __construct(
         private PDO $pdo,
         private SampelRutaRepository $rutaRepo,
         private AuditRepository $auditRepo
     ) {
+    }
+
+    /**
+     * Hak akses tulis modul LK Pengolahan Sampel.
+     * TRUE hanya untuk ADMIN, OPERATOR, dan SM_PLS (Tim IPDS).
+     * Peran lain (SM_SOSIAL, PML, PCL, PENGOLAH, PENGAWAS_OLAH, VIEWER) read-only.
+     *
+     * @param array<string,mixed> $user
+     */
+    public function canEdit(array $user): bool
+    {
+        $role = (string) ($user['role_code'] ?? $user['role'] ?? 'VIEWER');
+
+        return in_array($role, self::EDIT_ROLES, true);
+    }
+
+    /** Penegakan mutlak hak tulis; melanggar → RuntimeException ber-kode 403. */
+    private function assertCanEdit(array $user): void
+    {
+        if (!$this->canEdit($user)) {
+            throw new RuntimeException(self::EDIT_DENIED_MESSAGE, self::HTTP_FORBIDDEN);
+        }
     }
 
     /**
@@ -33,8 +69,11 @@ final class PengolahanService
         $role = (string) ($currentUser['role_code'] ?? $currentUser['role'] ?? 'VIEWER');
         $orangId = (int) ($currentUser['orang_id'] ?? 0);
 
-        // Filter default per peran jika belum dipilih secara eksplisit
-        if ($role === 'PCL' && $orangId > 0 && empty($filters['pcl_id'])) {
+        // PENGOLAH: paksa cakupan data binaan sendiri (abaikan parameter URL).
+        if ($role === 'PENGOLAH') {
+            $filters['pengolah_id'] = $orangId > 0 ? $orangId : -1;
+        } elseif ($role === 'PCL' && $orangId > 0 && empty($filters['pcl_id'])) {
+            // Filter default per peran jika belum dipilih secara eksplisit
             $filters['pcl_id'] = $orangId;
         } elseif ($role === 'PML' && $orangId > 0 && empty($filters['pml_id'])) {
             $filters['pml_id'] = $orangId;
@@ -103,8 +142,8 @@ final class PengolahanService
     }
 
     /**
-     * Update data pengolahan satu baris ruta (via AJAX / Form) dengan validasi role & audit log.
-     * Transfer K (Kor) dan Transfer KP secara spesifik diizinkan bagi petugas pengolahan.
+     * Update data pengolahan satu baris ruta (via AJAX / Form) dengan validasi RBAC & audit log.
+     * Read-write hanya untuk peran EDIT_ROLES: ADMIN, OPERATOR, SM_PLS (Tim IPDS).
      */
     public function updateRuta(int $rutaId, array $data, array $currentUser): array
     {
@@ -113,29 +152,12 @@ final class PengolahanService
             throw new RuntimeException('Data ruta tidak ditemukan.');
         }
 
-        $role = (string) ($currentUser['role_code'] ?? $currentUser['role'] ?? 'VIEWER');
-        $orangId = (int) ($currentUser['orang_id'] ?? 0);
+        // RBAC mutlak: hanya ADMIN, OPERATOR, dan SM_PLS (Tim IPDS) yang boleh mengubah
+        // data/status pengolahan. Peran lain (SM_SOSIAL, PML, PCL, PENGOLAH,
+        // PENGAWAS_OLAH, VIEWER) read-only — termasuk konfirmasi catatan lapangan.
+        $this->assertCanEdit($currentUser);
+
         $userId = (int) ($currentUser['id'] ?? 0);
-
-        $isPengolahRole = in_array($role, ['PENGOLAH', 'OPERATOR', 'PENGAWAS_OLAH', 'SM_PLS', 'ADMIN'], true);
-        $isLapangan = in_array($role, ['PCL', 'PML'], true);
-
-        // Aksi Transfer K, Transfer KP, Transfer Seruti, dan Status Dokumen Fisik:
-        // Dapat dilakukan oleh petugas pengolahan (PENGOLAH, OPERATOR, PENGAWAS_OLAH, SM_PLS, ADMIN)
-        $isTransferAction = isset($data['status_transfer_k']) || isset($data['status_transfer_kp']) || isset($data['status_transfer_seruti']);
-        $isDokumenAction = isset($data['status_dokumen']);
-
-        if (($isTransferAction || $isDokumenAction) && !$isPengolahRole) {
-            throw new RuntimeException('Transfer K (Kor), Transfer KP, dan status dokumen hanya dapat dilakukan oleh petugas pengolahan.');
-        }
-
-        // PCL/PML hanya boleh mengonfirmasi catatan konfirmasi lapangan di NKS binaannya
-        if ($isLapangan) {
-            $isBinaan = ((int) ($before['pcl_id'] ?? 0) === $orangId || (int) ($before['pml_id'] ?? 0) === $orangId);
-            if (!$isBinaan && $role !== 'ADMIN') {
-                throw new RuntimeException('Anda hanya berhak mengonfirmasi catatan NKS wilayah tugas Anda.');
-            }
-        }
 
         // Auto-populate metadata penerimaan fisik dokumen ketika status diubah menjadi ADA
         if (isset($data['status_dokumen'])) {
@@ -194,16 +216,13 @@ final class PengolahanService
 
     /**
      * Batch penerimaan dokumen fisik (1 SLS / 10 dokumen sekaligus atau pilihan ruta).
-     * Dapat dijalankan oleh petugas pengolahan.
+     * RBAC: hanya ADMIN, OPERATOR, dan SM_PLS (Tim IPDS).
      * @param array{periode_id:int, nks?:string, ruta_ids?:int[], tgl_pengiriman?:string, ttd_sos?:string, ttd_ipds?:string} $params
      */
     public function batchTerimaDokumen(array $params, array $currentUser): int
     {
-        $role = (string) ($currentUser['role_code'] ?? $currentUser['role'] ?? 'VIEWER');
-        $isPengolahRole = in_array($role, ['PENGOLAH', 'OPERATOR', 'PENGAWAS_OLAH', 'SM_PLS', 'ADMIN'], true);
-        if (!$isPengolahRole) {
-            throw new RuntimeException('Penerimaan dokumen fisik hanya dapat dilakukan oleh petugas pengolahan.');
-        }
+        // RBAC: penerimaan dokumen fisik = mutasi status → hanya ADMIN/OPERATOR/SM_PLS.
+        $this->assertCanEdit($currentUser);
 
         $periodeId = (int) ($params['periode_id'] ?? 0);
         $nks = trim((string) ($params['nks'] ?? ''));
@@ -297,11 +316,8 @@ final class PengolahanService
      */
     public function batchTransfer(array $params, array $currentUser): int
     {
-        $role = (string) ($currentUser['role_code'] ?? $currentUser['role'] ?? 'VIEWER');
-        $isPengolahRole = in_array($role, ['PENGOLAH', 'OPERATOR', 'PENGAWAS_OLAH', 'SM_PLS', 'ADMIN'], true);
-        if (!$isPengolahRole) {
-            throw new RuntimeException('Transfer K (Kor) dan Transfer KP hanya dapat dilakukan oleh petugas pengolahan.');
-        }
+        // RBAC: transfer K/KP/Seruti = mutasi status → hanya ADMIN/OPERATOR/SM_PLS.
+        $this->assertCanEdit($currentUser);
 
         $field = (string) ($params['field'] ?? '');
         $allowedFields = ['status_transfer_k', 'status_transfer_kp', 'status_transfer_seruti'];
@@ -515,7 +531,9 @@ final class PengolahanService
         $headersPengolah = [
             'No.', 'NKS', 'No. Ruta', 'Status',
             'Keterangan KP (Pengolah)', 'Keterangan KP (PCL/PML)', 'Keterangan KP (Tim Sosial)',
+            'Keputusan KP (Tim IPDS)',
             'Keterangan M (Pengolah)', 'Keterangan M (PCL/PML)', 'Keterangan M (Tim Sosial)',
+            'Keputusan M (Tim IPDS)',
             'Uji Petik Pengawas Pengolahan', 'PCL', 'PML', 'PENGOLAH'
         ];
 
@@ -538,9 +556,11 @@ final class PengolahanService
                     $pr['ket_kp_pengolah'] ?? '',
                     $pr['ket_kp_lapangan'] ?? '',
                     $pr['ket_kp_sosial'] ?? '',
+                    $pr['ket_kp_ipds'] ?? '',
                     $pr['ket_m_pengolah'] ?? '',
                     $pr['ket_m_lapangan'] ?? '',
                     $pr['ket_m_sosial'] ?? '',
+                    $pr['ket_m_ipds'] ?? '',
                     $pr['uji_petik_pengawas'] ?? '',
                     $pr['nama_pcl'] ?? '',
                     $pr['nama_pml'] ?? '',
@@ -559,11 +579,8 @@ final class PengolahanService
      */
     public function importLkExcel(int $periodeId, string $filePath, array $currentUser): array
     {
-        $role = (string) ($currentUser['role_code'] ?? $currentUser['role'] ?? 'VIEWER');
-        $isPengolahRole = in_array($role, ['PENGOLAH', 'OPERATOR', 'PENGAWAS_OLAH', 'SM_PLS', 'ADMIN'], true);
-        if (!$isPengolahRole) {
-            throw new RuntimeException('Hanya petugas pengolahan atau Admin yang berhak mengimpor Lembar Kerja.');
-        }
+        // RBAC: sinkronisasi Excel = mutasi massal → hanya ADMIN/OPERATOR/SM_PLS.
+        $this->assertCanEdit($currentUser);
 
         if (!file_exists($filePath)) {
             throw new RuntimeException('File Excel tidak ditemukan.');
@@ -673,10 +690,12 @@ final class PengolahanService
                      ket_kp_pengolah = :kp_pengolah,
                      ket_kp_lapangan = :kp_lap,
                      ket_kp_sosial = :kp_sos,
+                     ket_kp_ipds = :kp_ipds,
                      catatan_modul = COALESCE(:cmod, catatan_modul),
                      ket_m_pengolah = :m_pengolah,
                      ket_m_lapangan = :m_lap,
                      ket_m_sosial = :m_sos,
+                     ket_m_ipds = :m_ipds,
                      uji_petik_pengawas = :uji
                  WHERE sampel_id = :sid AND no_urut_ruta = :no'
             );
@@ -687,6 +706,17 @@ final class PengolahanService
                 }
                 $sheet = $spreadsheet->getSheetByName($sheetName);
                 if (!$sheet) continue;
+
+                // Deteksi layout: file baru memuat kolom "Keputusan ... (Tim IPDS)"
+                // di kolom 8 & 12; file lama (tanpa IPDS) tetap dibaca dgn indeks lama.
+                $col8Header = strtolower(trim((string)$sheet->getCell([8, 1])->getValue()));
+                $hasIpdsCols = str_contains($col8Header, 'ipds');
+                $cKpIpds = $hasIpdsCols ? 8 : 0;
+                $cMPengolah = $hasIpdsCols ? 9 : 8;
+                $cMLap = $hasIpdsCols ? 10 : 9;
+                $cMSos = $hasIpdsCols ? 11 : 10;
+                $cMIpds = $hasIpdsCols ? 12 : 0;
+                $cUji = $hasIpdsCols ? 13 : 11;
 
                 $pRows = $sheet->getHighestRow();
                 for ($r = 2; $r <= $pRows; $r++) {
@@ -700,22 +730,26 @@ final class PengolahanService
                     $kpPengolah = trim((string)$sheet->getCell([5, $r])->getValue());
                     $kpLap = trim((string)$sheet->getCell([6, $r])->getValue());
                     $kpSos = trim((string)$sheet->getCell([7, $r])->getValue());
-                    $mPengolah = trim((string)$sheet->getCell([8, $r])->getValue());
-                    $mLap = trim((string)$sheet->getCell([9, $r])->getValue());
-                    $mSos = trim((string)$sheet->getCell([10, $r])->getValue());
-                    $uji = trim((string)$sheet->getCell([11, $r])->getValue());
+                    $kpIpds = $cKpIpds > 0 ? trim((string)$sheet->getCell([$cKpIpds, $r])->getValue()) : '';
+                    $mPengolah = trim((string)$sheet->getCell([$cMPengolah, $r])->getValue());
+                    $mLap = trim((string)$sheet->getCell([$cMLap, $r])->getValue());
+                    $mSos = trim((string)$sheet->getCell([$cMSos, $r])->getValue());
+                    $mIpds = $cMIpds > 0 ? trim((string)$sheet->getCell([$cMIpds, $r])->getValue()) : '';
+                    $uji = trim((string)$sheet->getCell([$cUji, $r])->getValue());
 
-                    if ($kpPengolah !== '' || $kpLap !== '' || $kpSos !== '' ||
-                        $mPengolah !== '' || $mLap !== '' || $mSos !== '' || $uji !== '') {
+                    if ($kpPengolah !== '' || $kpLap !== '' || $kpSos !== '' || $kpIpds !== '' ||
+                        $mPengolah !== '' || $mLap !== '' || $mSos !== '' || $mIpds !== '' || $uji !== '') {
                         $updateCatatanStmt->execute([
                             ':ckp' => ($kpPengolah !== '') ? 1 : null,
                             ':kp_pengolah' => $kpPengolah !== '' ? $kpPengolah : null,
                             ':kp_lap' => $kpLap !== '' ? $kpLap : null,
                             ':kp_sos' => $kpSos !== '' ? $kpSos : null,
+                            ':kp_ipds' => $kpIpds !== '' ? $kpIpds : null,
                             ':cmod' => ($mPengolah !== '') ? 1 : null,
                             ':m_pengolah' => $mPengolah !== '' ? $mPengolah : null,
                             ':m_lap' => $mLap !== '' ? $mLap : null,
                             ':m_sos' => $mSos !== '' ? $mSos : null,
+                            ':m_ipds' => $mIpds !== '' ? $mIpds : null,
                             ':uji' => $uji !== '' ? $uji : null,
                             ':sid' => $sampelId,
                             ':no' => $noRuta,

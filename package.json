@@ -1,0 +1,30 @@
+{
+  "name": "sipandhalu",
+  "version": "1.0.0",
+  "description": "**Sistem Informasi Pandhalungan Susenas-Seruti** — BPS Kabupaten Jember",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "playwright test --project=chromium",
+    "test:all": "playwright test",
+    "test:debug": "playwright test --debug"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nanangpx0-hub/sipandhalu.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/nanangpx0-hub/sipandhalu/issues"
+  },
+  "homepage": "https://github.com/nanangpx0-hub/sipandhalu#readme",
+  "dependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}

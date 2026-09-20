@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * Seed 004 - DATA DUMMY semua tabel untuk uji coba aplikasi SIPANDHALU.
- * Menambah: 28 PCL + 15 PML dummy, 4 user demo (must_reset=0, password Dummy3509!),
+ * Menambah: 28 PCL + 15 PML dummy, 4 user demo (must_reset=0, password Jember3509),
  * periode SUSENAS_S1 2026 (TUTUP, demo histori) + SERUTI_Q1 2026 (DRAFT, demo rotasi),
  * sampel + penugasan mengikuti aturan K4 (1 orang 1 peran per periode).
  * Idempoten. Jalankan: php database/seeds/004_dummy_seed.php
@@ -58,8 +58,8 @@ $pengolahIds = array_map(static fn (int $i): int => $i, range(1, 8)); // 8 pengo
 echo 'orang: ', count($pclIds) + count($pmlIds), ' dummy (28 PCL + 15 PML)', PHP_EOL;
 
 // ---------------------------------------------------------------- 2) USERS DEMO
-// Password satu untuk semua akun demo: Dummy3509!  (must_reset=0 agar langsung bisa login)
-$hash = password_hash('Dummy3509!', PASSWORD_ARGON2ID);
+// Password satu untuk semua akun demo: Jember3509  (must_reset=0 agar langsung bisa login)
+$hash = password_hash('Jember3509', PASSWORD_ARGON2ID);
 $demo = [
     ['Petugas PCL Demo', 'pcl.demo@bpsjember.go.id', $roleId('PCL'), $pclIds[0]],
     ['Petugas PML Demo', 'pml.demo@bpsjember.go.id', $roleId('PML'), $pmlIds[0]],
@@ -75,7 +75,7 @@ $insUser = $pdo->prepare(
 foreach ($demo as [$n, $e, $r, $o]) {
     $insUser->execute([':n' => $n, ':e' => $e, ':h' => $hash, ':r' => $r, ':o' => $o]);
 }
-echo 'users demo: 4 (pcl/pml/operator/viewer, password Dummy3509!)', PHP_EOL;
+echo 'users demo: 4 (pcl/pml/operator/viewer, password Jember3509)', PHP_EOL;
 
 // ---------------------------------------------------------------- 3) PERIODE TAMBAHAN
 $insPeriode = $pdo->prepare(

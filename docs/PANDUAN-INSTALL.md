@@ -235,11 +235,11 @@ Get-ChildItem -Recurse -Filter *.php | Where-Object { $_.FullName -notmatch '\\v
 
 | Email | Password | Peran | Catatan |
 |---|---|---|---|
-| `admin@bpsjember.go.id` | `Admin3509!` | ADMIN | wajib ganti password pertama kali |
-| `pcl.demo@bpsjember.go.id` | `Dummy3509!` | PCL | langsung masuk |
-| `pml.demo@bpsjember.go.id` | `Dummy3509!` | PML | langsung masuk |
-| `operator.demo@bpsjember.go.id` | `Dummy3509!` | OPERATOR | langsung masuk |
-| `viewer.demo@bpsjember.go.id` | `Dummy3509!` | VIEWER | langsung masuk |
+| `admin@bpsjember.go.id` | `Jember3509` | ADMIN | wajib ganti password pertama kali |
+| `pcl.demo@bpsjember.go.id` | `Jember3509` | PCL | langsung masuk |
+| `pml.demo@bpsjember.go.id` | `Jember3509` | PML | langsung masuk |
+| `operator.demo@bpsjember.go.id` | `Jember3509` | OPERATOR | langsung masuk |
+| `viewer.demo@bpsjember.go.id` | `Jember3509` | VIEWER | langsung masuk |
 | 8 email pengolah dari sheet Rincian | `Jember3509` | PENGOLAH | wajib ganti password pertama kali |
 
 ---

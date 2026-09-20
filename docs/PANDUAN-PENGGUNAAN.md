@@ -12,7 +12,7 @@
 
 | Email | Password | Peran | Catatan |
 |---|---|---|---|
-| `admin@bpsjember.go.id` | `Admin3509!` | ADMIN | ⚠️ diminta ganti password saat login pertama |
+| `admin@bpsjember.go.id` | `Jember3509` | ADMIN | ⚠️ diminta ganti password saat login pertama |
 | `aminatuss182002@gmail.com` | `Jember3509` | PENGOLAH | ⚠️ wajib ganti password (8 akun pengolah asli dari sheet Rincian) |
 | `anunganindhitap@gmail.com` | `Jember3509` | PENGOLAH | idem |
 | `putrisalsabhilafahira10@gmail.com` | `Jember3509` | PENGOLAH | idem |
@@ -21,10 +21,10 @@
 | `lavianaikarumby@gmail.com` | `Jember3509` | PENGOLAH | idem |
 | `nidasuryandari@gmail.com` | `Jember3509` | PENGOLAH | idem |
 | `a.widarianti@gmail.com` | `Jember3509` | PENGOLAH | idem |
-| `pcl.demo@bpsjember.go.id` | `Dummy3509!` | PCL | ✅ langsung masuk |
-| `pml.demo@bpsjember.go.id` | `Dummy3509!` | PML | ✅ langsung masuk |
-| `operator.demo@bpsjember.go.id` | `Dummy3509!` | OPERATOR | ✅ langsung masuk |
-| `viewer.demo@bpsjember.go.id` | `Dummy3509!` | VIEWER | ✅ langsung masuk |
+| `pcl.demo@bpsjember.go.id` | `Jember3509` | PCL | ✅ langsung masuk |
+| `pml.demo@bpsjember.go.id` | `Jember3509` | PML | ✅ langsung masuk |
+| `operator.demo@bpsjember.go.id` | `Jember3509` | OPERATOR | ✅ langsung masuk |
+| `viewer.demo@bpsjember.go.id` | `Jember3509` | VIEWER | ✅ langsung masuk |
 
 > Akun dengan `must_reset` (admin + 8 pengolah) diarahkan ke `/password` setelah login:
 > isi password baru (minimal 8 karakter). Password disimpan sebagai hash **Argon2id**,

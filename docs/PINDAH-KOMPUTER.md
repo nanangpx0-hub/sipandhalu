@@ -129,7 +129,7 @@ Lalu login dengan akun demo — daftar lengkap di
 
 ```
 http://localhost:8091/login
-pcl.demo@bpsjember.go.id / Dummy3509!
+pcl.demo@bpsjember.go.id / Jember3509
 ```
 
 ## 7. Troubleshooting

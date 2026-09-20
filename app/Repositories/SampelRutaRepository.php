@@ -283,8 +283,8 @@ final class SampelRutaRepository
     {
         $allowedFields = [
             'status_dokumen', 'status_transfer_k', 'status_transfer_kp', 'status_transfer_seruti',
-            'status_selesai', 'catatan_kp', 'ket_kp_pengolah', 'ket_kp_lapangan', 'ket_kp_sosial',
-            'catatan_modul', 'ket_m_pengolah', 'ket_m_lapangan', 'ket_m_sosial', 'uji_petik_pengawas',
+            'status_selesai', 'catatan_kp', 'ket_kp_pengolah', 'ket_kp_lapangan', 'ket_kp_sosial', 'ket_kp_ipds',
+            'catatan_modul', 'ket_m_pengolah', 'ket_m_lapangan', 'ket_m_sosial', 'ket_m_ipds', 'uji_petik_pengawas',
             'tgl_pengiriman', 'ttd_sos', 'ttd_ipds'
         ];
 
@@ -296,7 +296,7 @@ final class SampelRutaRepository
                 $val = $data[$f];
                 if (in_array($f, ['status_transfer_k', 'status_transfer_kp', 'status_transfer_seruti', 'catatan_kp', 'catatan_modul'], true)) {
                     $val = !empty($val) ? 1 : 0;
-                } elseif (in_array($f, ['ket_kp_pengolah', 'ket_kp_lapangan', 'ket_kp_sosial', 'ket_m_pengolah', 'ket_m_lapangan', 'ket_m_sosial', 'uji_petik_pengawas'], true)) {
+                } elseif (in_array($f, ['ket_kp_pengolah', 'ket_kp_lapangan', 'ket_kp_sosial', 'ket_kp_ipds', 'ket_m_pengolah', 'ket_m_lapangan', 'ket_m_sosial', 'ket_m_ipds', 'uji_petik_pengawas'], true)) {
                     $val = ($val !== null && trim((string)$val) !== '') ? trim((string)$val) : null;
                 }
                 $sets[] = "`{$f}` = :{$f}";

@@ -101,6 +101,25 @@ final class OrangRepository
         return $row === false ? null : $row;
     }
 
+    /**
+     * Satu baris orang dgn bentuk sama seperti baris paginate()
+     * (termasuk jml_alias + jml_akun) — untuk cakupan "data sendiri".
+     */
+    public function findScoped(int $id): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT o.*, r.code AS role_code, r.label AS role_label,
+                    (SELECT COUNT(*) FROM orang_alias a WHERE a.orang_id=o.id) AS jml_alias,
+                    (SELECT COUNT(*) FROM users u WHERE u.orang_id=o.id) AS jml_akun
+             FROM orang o
+             LEFT JOIN roles r ON r.id=o.role_id
+             WHERE o.id=:id LIMIT 1'
+        );
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+        return $row === false ? null : $row;
+    }
+
     public function findByNormalized(string $normalized): ?array
     {
         $stmt = $this->pdo->prepare(

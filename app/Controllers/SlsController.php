@@ -24,6 +24,13 @@ final class SlsController
 
     public function __construct()
     {
+        // Master SLS tidak tampil untuk PENGOLAH (seluruh aksi incl. export/ajax).
+        Session::start();
+        if (($_SESSION['user']['role_code'] ?? '') === 'PENGOLAH') {
+            http_response_code(403);
+            require dirname(__DIR__) . '/Views/errors/403.phtml';
+            exit;
+        }
         $pdo = Database::connection();
         $this->sls = new SlsRepository($pdo);
         $this->wil = new WilayahRepository($pdo);
