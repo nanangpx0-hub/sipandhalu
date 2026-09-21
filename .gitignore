@@ -1,33 +1,28 @@
+# Dependencies
+vendor/
+node_modules/
+
+# Environment
 .env
-/vendor/
-/storage/*
-!/storage/.gitkeep
+
+# Logs
+storage/logs/
 *.log
-.phpunit.result.cache
-.cache
-# Node / Playwright (jangan upload node_modules & artefak test)
-/node_modules/
-package-lock.json
-/playwright-report/
-/test-results/
-playwright-report/
+
+# Test results
 test-results/
-tests/playwright_last_run.txt
-*.har
-# File sementara / kredensial lokal
-cc.txt
-cj.txt
-cookies.txt
-SID_*
-cookie*
-# Data BPS sensitif (RAHASIA, PII) - jangan pernah di-commit
-/data/
-# IDE/OS
-.idea/
-.vscode/
+playwright-report/
+
+# OS
 .DS_Store
 Thumbs.db
+
+# IDE
+.idea/
+.vscode/
 *.swp
 *.swo
-~$*
 
+# Temp
+*.tmp
+temp/

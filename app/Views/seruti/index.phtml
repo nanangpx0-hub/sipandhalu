@@ -1,0 +1,381 @@
+<?php
+$title = 'Pengolahan Seruti';
+require __DIR__ . '/../layouts/header.phtml';
+
+use App\Core\View;
+
+$csrf = $csrf ?? \App\Core\Csrf::field();
+$periodes = $periodes ?? [];
+$currentPeriodeId = (int) ($currentPeriodeId ?? 0);
+$rutaList = $rutaList ?? [];
+$kpi = $kpi ?? ['total_sampel' => 0, 'susenas_selesai' => 0, 'susenas_selesai_pct' => 0.0, 'siap_olah' => 0, 'terkunci' => 0, 'selesai_transfer' => 0];
+$nksCount = $nksCount ?? 0;
+$pengolahList = $pengolahList ?? [];
+$filters = $filters ?? [];
+$currentUser = $currentUser ?? [];
+$canTransferSeruti = (bool) ($canTransferSeruti ?? false);
+$canEdit = (bool) ($canEdit ?? false);
+$success = $success ?? '';
+$error = $error ?? '';
+
+$isPengolah = (($currentUser['role_code'] ?? '') === 'PENGOLAH');
+$isAdmin = (($currentUser['role_code'] ?? '') === 'ADMIN');
+$isOperator = (($currentUser['role_code'] ?? '') === 'OPERATOR');
+$isPengawas = (($currentUser['role_code'] ?? '') === 'PENGAWAS_OLAH');
+$isSmPls = (($currentUser['role_code'] ?? '') === 'SM_PLS');
+
+$disTransferSerutiAttr = $canTransferSeruti ? '' : ' disabled';
+?>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+  <div>
+    <h1 class="h3 mb-0 text-gray-800">
+      <i class="fas fa-layer-group mr-2 text-indigo"></i>Pengolahan Seruti
+    </h1>
+    <small class="text-muted">Pemantauan dan pengolahan kuesioner Seruti triwulan — integrasi data Susenas</small>
+  </div>
+  <div class="d-flex align-items-center mt-2 mt-md-0">
+    <form method="get" action="/seruti" class="form-inline mr-2">
+      <select name="periode_id" class="form-control form-control-sm" onchange="this.form.submit()">
+        <?php foreach ($periodes as $p): ?>
+          <option value="<?= (int) $p['id'] ?>" <?= ((int) $p['id'] === $currentPeriodeId) ? 'selected' : '' ?>>
+            <?= View::e($p['label']) ?> (<?= View::e($p['status']) ?>)
+          </option>
+        <?php endforeach; ?>
+      </select>
+    </form>
+    <a href="/seruti/export?periode_id=<?= $currentPeriodeId ?>" class="btn btn-sm btn-outline-success mr-2">
+      <i class="fas fa-file-excel mr-1"></i>Export Excel
+    </a>
+  </div>
+</div>
+
+<div id="ajaxAlertContainer"></div>
+<?php if (!empty($success)): ?>
+  <div class="alert alert-success alert-dismissible fade show py-2 mb-3" role="alert">
+    <i class="fas fa-check-circle mr-2"></i><?= View::e($success) ?>
+    <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+  </div>
+<?php endif; ?>
+<?php if (!empty($error)): ?>
+  <div class="alert alert-danger alert-dismissible fade show py-2 mb-3" role="alert">
+    <i class="fas fa-exclamation-triangle mr-2"></i><?= View::e($error) ?>
+    <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+  </div>
+<?php endif; ?>
+
+<!-- PILL TABS TRIWULAN -->
+<div class="card shadow-sm mb-3">
+  <div class="card-body py-2">
+    <div class="btn-group btn-group-sm" role="tablist">
+      <?php foreach ($periodes as $p):
+        $pid = (int) $p['id'];
+        $pJenis = (string) ($p['jenis'] ?? '');
+        $pLabel = View::e($p['label'] ?? '');
+        $pStatus = View::e($p['status'] ?? '');
+        $activeClass = ($pid === $currentPeriodeId) ? 'active' : '';
+        $badgeClass = ($pStatus === 'AKTIF') ? 'badge-success' : (($pStatus === 'DRAFT') ? 'badge-warning text-dark' : 'badge-secondary');
+      ?>
+        <a href="/seruti?periode_id=<?= $pid ?>" class="btn btn-sm btn-outline-indigo <?= $activeClass ?>" role="tab">
+          <i class="fas fa-flag mr-1"></i><?= $pLabel ?>
+          <span class="badge <?= $badgeClass ?> ml-1"><?= $pStatus ?></span>
+        </a>
+      <?php endforeach; ?>
+    </div>
+  </div>
+</div>
+
+<!-- TIER 1: KPI CARDS -->
+<div class="row mb-3">
+  <div class="col-6 col-md-4 col-lg-2 mb-3">
+    <div class="card shadow-sm border-left-primary h-100 py-2">
+      <div class="card-body py-1">
+        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Sampel</div>
+        <div class="h5 mb-0 font-weight-bold text-gray-800"><?= $kpi['total_sampel'] ?></div>
+        <div class="small text-muted mt-1"><?= $nksCount ?> NKS</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2 mb-3">
+    <div class="card shadow-sm border-left-info h-100 py-2">
+      <div class="card-body py-1">
+        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Kesiapan Susenas</div>
+        <div class="h5 mb-0 font-weight-bold text-gray-800"><?= $kpi['susenas_selesai'] ?> <small class="text-muted">(<?= number_format($kpi['susenas_selesai_pct'], 1) ?>%)</small></div>
+        <div class="progress progress-sm mt-2">
+          <div class="progress-bar bg-info" style="width: <?= $kpi['susenas_selesai_pct'] ?>%"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2 mb-3">
+    <div class="card shadow-sm border-left-success h-100 py-2">
+      <div class="card-body py-1">
+        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Sampel Siap Olah</div>
+        <div class="h5 mb-0 font-weight-bold text-gray-800"><?= $kpi['siap_olah'] ?></div>
+        <div class="small text-muted mt-1">Aktif</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2 mb-3">
+    <div class="card shadow-sm border-left-warning h-100 py-2">
+      <div class="card-body py-1">
+        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Sampel Terkunci</div>
+        <div class="h5 mb-0 font-weight-bold text-gray-800"><?= $kpi['terkunci'] ?></div>
+        <div class="small text-muted mt-1">Menunggu Susenas</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2 mb-3">
+    <div class="card shadow-sm border-left-secondary h-100 py-2">
+      <div class="card-body py-1">
+        <div class="text-xs font-weight-bold text-secondary text-uppercase mb-1">Selesai Transfer</div>
+        <div class="h5 mb-0 font-weight-bold text-gray-800"><?= $kpi['selesai_transfer'] ?></div>
+        <div class="small text-muted mt-1">Transfer Seruti</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TIER 2: FILTER & SEARCH -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header py-2 bg-light">
+    <h6 class="m-0 font-weight-bold text-gray-700">
+      <i class="fas fa-filter mr-1 text-primary"></i>Filter & Pencarian Cepat
+    </h6>
+  </div>
+  <div class="card-body py-2">
+    <form method="get" action="/seruti" class="row align-items-center">
+      <input type="hidden" name="periode_id" value="<?= $currentPeriodeId ?>">
+      <div class="col-md-3 col-sm-6 mb-2 mb-md-0">
+        <label class="small text-muted mb-0">NKS:</label>
+        <select name="nks" class="form-control form-control-sm">
+          <option value="">-- Semua NKS --</option>
+          <?php
+          $nksList = [];
+          foreach ($rutaList as $r) {
+            $nksVal = trim((string)($r['nks'] ?? ''));
+            if ($nksVal !== '' && !isset($nksList[$nksVal])) {
+              $nksList[$nksVal] = $nksVal;
+            }
+          }
+          foreach ($nksList as $nksVal): ?>
+            <option value="<?= View::e($nksVal) ?>" <?= (($filters['nks'] ?? '') === $nksVal) ? 'selected' : '' ?>>
+              <?= View::e($nksVal) ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="col-md-2 col-sm-6 mb-2 mb-md-0">
+        <label class="small text-muted mb-0">Kesiapan:</label>
+        <select name="status_kesiapan" class="form-control form-control-sm">
+          <option value="">-- Semua --</option>
+          <option value="siap" <?= (($filters['status_kesiapan'] ?? '') === 'siap') ? 'selected' : '' ?>>Siap Olah</option>
+          <option value="menunggu" <?= (($filters['status_kesiapan'] ?? '') === 'menunggu') ? 'selected' : '' ?>>Menunggu Susenas</option>
+        </select>
+      </div>
+      <div class="col-md-2 col-sm-6 mb-2 mb-md-0">
+        <label class="small text-muted mb-0">Pengolah:</label>
+        <select name="pengolah_id" class="form-control form-control-sm">
+          <option value="">-- Semua Pengolah --</option>
+          <?php foreach ($pengolahList as $p): ?>
+            <option value="<?= (int) $p['id'] ?>" <?= (($filters['pengolah_id'] ?? '') === (string) $p['id']) ? 'selected' : '' ?>>
+              <?= View::e($p['nama']) ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="col-md-3 col-sm-6 mb-2 mb-md-0">
+        <label class="small text-muted mb-0">Pencarian:</label>
+        <input type="text" name="q" class="form-control form-control-sm" placeholder="NKS, Desa, Kec..." value="<?= View::e($filters['q'] ?? '') ?>">
+      </div>
+      <div class="col-md-2 col-sm-12 text-right mt-3 mt-md-0">
+        <button type="submit" class="btn btn-sm btn-primary mr-1"><i class="fas fa-search mr-1"></i>Filter</button>
+        <a href="/seruti?periode_id=<?= $currentPeriodeId ?>" class="btn btn-sm btn-outline-secondary" title="Reset"><i class="fas fa-undo"></i></a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- TIER 3: DATA GRID -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header py-2 d-flex justify-content-between align-items-center">
+    <h6 class="m-0 font-weight-bold text-gray-800">
+      <i class="fas fa-table mr-1 text-primary"></i>Daftar Kuesioner Seruti (<?= count($rutaList) ?> baris)
+    </h6>
+    <?php if ($canTransferSeruti): ?>
+    <div class="dropdown">
+      <button class="btn btn-xs btn-outline-success dropdown-toggle font-weight-bold" type="button" id="dropdownBatchTransferSeruti" data-toggle="dropdown">
+        <i class="fas fa-paper-plane mr-1"></i>Batch Transfer Seruti
+      </button>
+      <div class="dropdown-menu dropdown-menu-right">
+        <a class="dropdown-item" href="#" id="btnBatchTransferSeruti1"><i class="fas fa-check-circle text-success mr-2"></i>Tandai Semua Transfer Seruti</a>
+        <a class="dropdown-item text-danger" href="#" id="btnBatchTransferSeruti0"><i class="fas fa-undo text-danger mr-2"></i>Batalkan Semua Transfer Seruti</a>
+      </div>
+    </div>
+    <?php endif; ?>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-bordered table-hover table-striped mb-0 text-sm" id="tableSeruti">
+        <thead class="thead-light">
+          <tr>
+            <th style="width: 40px;">No.</th>
+            <th style="width: 80px;">NKS</th>
+            <th>Kecamatan / Desa</th>
+            <th style="width: 50px;">Ruta</th>
+            <th>Pengolah</th>
+            <th style="width: 120px;">Prasyarat Susenas</th>
+            <th style="width: 100px;">Status Seruti</th>
+            <th style="width: 100px;">Transfer Seruti</th>
+            <th>Catatan Kendali Mutu</th>
+            <th style="width: 70px;">Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php if (empty($rutaList)): ?>
+            <tr>
+              <td colspan="10" class="text-center text-muted py-4">
+                <i class="fas fa-inbox fa-2x mb-2 d-block text-gray-400"></i>Tidak ada data yang cocok dengan kriteria filter.
+              </td>
+            </tr>
+          <?php endif; ?>
+          <?php foreach ($rutaList as $idx => $r):
+            $susenasReady = !empty($r['is_seruti_aktif']);
+            $rutaId = (int) ($r['id'] ?? 0);
+            $transferDisabled = !$canTransferSeruti ? ' disabled' : '';
+            $transferTitle = !$canTransferSeruti
+              ? ' title="Akses ditolak: Khusus untuk Operator, Pengawas Pengolahan, dan Admin."'
+              : '';
+            $catatanEnabled = $canEdit ? '' : ' readonly';
+          ?>
+            <tr id="row_seruti_<?= $rutaId ?>" class="<?= !$susenasReady ? 'bg-light text-muted' : '' ?>">
+              <td class="text-center font-weight-bold text-muted"><?= $idx + 1 ?></td>
+              <td class="text-center"><span class="badge badge-dark"><?= View::e($r['nks'] ?? '') ?></span></td>
+              <td>
+                <div class="font-weight-bold"><?= View::e($r['nama_desa'] ?? '-') ?></div>
+                <small class="text-muted"><?= View::e($r['nama_kecamatan'] ?? '-') ?></small>
+              </td>
+              <td class="text-center font-weight-bold text-primary h6 mb-0"><?= (int) ($r['no_urut_ruta'] ?? 0) ?></td>
+              <td>
+                <div class="font-weight-bold text-dark"><?= View::e($r['nama_pengolah'] ?? '-') ?></div>
+              </td>
+              <td class="text-center">
+                <?php if ($susenasReady): ?>
+                  <span class="badge badge-success px-2 py-1"><i class="fas fa-check-circle mr-1"></i>Susenas Selesai</span>
+                <?php else: ?>
+                  <span class="badge badge-warning px-2 py-1"><i class="fas fa-lock mr-1"></i>Menunggu Susenas</span>
+                <?php endif; ?>
+              </td>
+              <td class="text-center">
+                <?php if ($susenasReady): ?>
+                  <span class="badge badge-success px-2 py-1"><i class="fas fa-check-circle mr-1"></i>Siap Olah</span>
+                <?php else: ?>
+                  <span class="badge badge-secondary px-2 py-1"><i class="fas fa-lock mr-1"></i>Terkunci</span>
+                <?php endif; ?>
+              </td>
+              <td class="text-center">
+                <div class="custom-control custom-switch">
+                  <input type="checkbox"
+                         class="custom-control-input chk-transfer-seruti"
+                         id="trfSer_<?= $rutaId ?>"
+                         data-id="<?= $rutaId ?>"
+                         data-field="status_transfer_seruti"
+                         <?= !empty($r['status_transfer_seruti']) ? 'checked' : '' ?><?= $transferDisabled ?><?= $transferTitle ?>>
+                  <label class="custom-control-label" for="trfSer_<?= $rutaId ?>"></label>
+                </div>
+              </td>
+              <td>
+                <?php if (!empty($r['catatan_seruti'] ?? '')): ?>
+                  <small class="text-dark" title="<?= View::e($r['catatan_seruti'] ?? '') ?>">
+                    <?= View::e(mb_strimwidth((string)($r['catatan_seruti'] ?? ''), 0, 50, '...')) ?>
+                  </small>
+                <?php else: ?>
+                  <small class="text-muted"><i class="fas fa-check text-success mr-1"></i>Clean</small>
+                <?php endif; ?>
+              </td>
+              <td class="text-center">
+                <button type="button"
+                        class="btn btn-xs btn-outline-primary btn-telaah-seruti"
+                        data-json="<?= htmlspecialchars(json_encode($r), ENT_QUOTES, 'UTF-8') ?>"
+                        data-susenas-aktif="<?= $susenasReady ? 1 : 0 ?>"
+                        data-id="<?= $rutaId ?>"
+                        title="Telaah">
+                  <i class="fas fa-search mr-1"></i>Telaah
+                </button>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL TELAAH KUESIONER SERUTI -->
+<div class="modal fade" id="modalTelaahSeruti" tabindex="-1" role="dialog" aria-labelledby="modalTelaahSerutiLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-indigo text-white py-2">
+        <h5 class="modal-title h6" id="modalTelaahSerutiLabel">
+          <i class="fas fa-search-plus mr-1"></i>Telaah Kuesioner Seruti
+        </h5>
+        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <form id="formTelaahSeruti">
+        <input type="hidden" name="_csrf" value="">
+        <input type="hidden" name="ruta_id" id="modal_ruta_id">
+        <div class="modal-body py-3">
+          <div class="alert alert-warning py-2 mb-3 d-none" id="alertSerutiBelumAktif">
+            <i class="fas fa-lock mr-2"></i><strong>Sampel Seruti Belum Aktif:</strong> Kuesioner ini berstatus terkunci. Dokumen Susenas di NKS ini harus selesai diolah terlebih dahulu.
+          </div>
+          <div class="alert alert-light border mb-3 py-2">
+            <div class="row">
+              <div class="col-md-3"><strong>NKS:</strong> <span id="m_nks" class="badge badge-dark">-</span></div>
+              <div class="col-md-5"><strong>SLS/Desa:</strong> <span id="m_wilayah">-</span></div>
+              <div class="col-md-4"><strong>No. Urut Ruta:</strong> <span id="m_ruta" class="font-weight-bold text-primary">-</span></div>
+            </div>
+            <div class="row mt-1 small text-muted">
+              <div class="col-md-4"><strong>Pengolah:</strong> <span id="m_pengolah">-</span></div>
+            </div>
+          </div>
+          <div class="card bg-light border mb-3">
+            <div class="card-body py-2">
+              <div class="row align-items-center">
+                <div class="col-md-6 mb-2 mb-md-0">
+                  <label class="font-weight-bold small text-muted mb-1 d-block"><i class="fas fa-paper-plane mr-1 text-secondary"></i>Transfer Seruti:</label>
+                  <div class="custom-control custom-switch">
+                    <input type="checkbox" class="custom-control-input" id="m_status_transfer_seruti" name="status_transfer_seruti" value="1"<?= $disTransferSerutiAttr ?>>
+                    <label class="custom-control-label font-weight-bold text-secondary" for="m_status_transfer_seruti">Sudah Transfer</label>
+                  </div>
+                  <small class="text-muted d-block mt-1" id="noteTransferSeruti"></small>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="form-group mb-2">
+            <label class="font-weight-bold text-indigo small mb-1"><i class="fas fa-clipboard-check mr-1"></i>Catatan Kendali Mutu Seruti:</label>
+            <textarea class="form-control form-control-sm" name="catatan_seruti" id="m_catatan_seruti" rows="3" placeholder="Catatan kendala mutu, temuan, atau catatan pengolahan Seruti..."<?= $catatanEnabled ?>></textarea>
+          </div>
+          <?php if ($isPengolah): ?>
+          <div class="alert alert-light border py-2 mb-2 small text-muted">
+            <i class="fas fa-user-edit mr-1 text-warning"></i>
+            Anda login sebagai Pengolah — hanya dapat menginput catatan kendala mutu dan temuan error. Transfer Seruti tidak tersedia untuk peran Anda.
+          </div>
+          <?php endif; ?>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Tutup</button>
+          <?php if ($canEdit): ?>
+          <button type="submit" class="btn btn-sm btn-primary" id="btnSimpanTelaahSeruti">
+            <i class="fas fa-save mr-1"></i>Simpan Perubahan
+          </button>
+          <?php else: ?>
+          <span class="text-muted small ml-2"><i class="fas fa-lock mr-1"></i>Mode tinjau (read-only).</span>
+          <?php endif; ?>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
