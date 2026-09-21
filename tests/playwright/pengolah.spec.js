@@ -262,9 +262,9 @@ test.describe('SIPANDHALU — Peran Pengolah Data', () => {
     await loginAfterReset(page);
     const ownId = await ownPetugasId(page);
     const otherId = ownId === 1 ? 2 : 1;
-    // ambil token CSRF valid dari form edit milik sendiri
+    // ambil token CSRF valid dari form edit milik sendiri (bukan form logout navbar)
     await page.goto(`${BASE}/petugas/${ownId}/edit`, { waitUntil: 'domcontentloaded' });
-    const token = await page.locator('input[name="_csrf"]').getAttribute('value');
+    const token = await page.locator(`form[action="/petugas/${ownId}"] input[name="_csrf"]`).getAttribute('value');
     // nama dikosongkan: kalau gate jebol pun validasi menggagalkan tulis
     const response = await page.request.post(`${BASE}/petugas/${otherId}`, {
       form: { _csrf: token, nama: '', no_hp: '', email: '', alamat: '' },
@@ -279,10 +279,11 @@ test.describe('SIPANDHALU — Peran Pengolah Data', () => {
     // dropdown level + checkbox aktif disembunyikan untuk pengolah
     await expect(page.locator('select[name="role_id"]')).toHaveCount(0);
     await expect(page.locator('input[name="is_aktif"]')).toHaveCount(0);
-    const token = await page.locator('input[name="_csrf"]').getAttribute('value');
-    const nama = await page.locator('input[name="nama"]').inputValue();
-    const noHp = await page.locator('input[name="no_hp"]').inputValue();
-    const email = await page.locator('input[name="email"]').inputValue();
+    const editForm = page.locator(`form[action="/petugas/${ownId}"]`);
+    const token = await editForm.locator('input[name="_csrf"]').getAttribute('value');
+    const nama = await editForm.locator('input[name="nama"]').inputValue();
+    const noHp = await editForm.locator('input[name="no_hp"]').inputValue();
+    const email = await editForm.locator('input[name="email"]').inputValue();
     const alamatBaru = 'Jl. Tes E2E ' + Date.now();
     const response = await page.request.post(`${BASE}/petugas/${ownId}`, {
       form: { _csrf: token, nama, no_hp: noHp, email, alamat: alamatBaru },
@@ -296,7 +297,7 @@ test.describe('SIPANDHALU — Peran Pengolah Data', () => {
     await loginAfterReset(page);
     const ownId = await ownPetugasId(page);
     await page.goto(`${BASE}/petugas/${ownId}/edit`, { waitUntil: 'domcontentloaded' });
-    const token = await page.locator('input[name="_csrf"]').getAttribute('value');
+    const token = await page.locator(`form[action="/petugas/${ownId}"] input[name="_csrf"]`).getAttribute('value');
     const toggleRes = await page.request.post(`${BASE}/petugas/${ownId}/toggle`, {
       form: { _csrf: token },
     });
@@ -308,6 +309,21 @@ test.describe('SIPANDHALU — Peran Pengolah Data', () => {
     // form alias juga disembunyikan di halaman detail
     await page.goto(`${BASE}/petugas/${ownId}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('input[name="alias"]')).toHaveCount(0);
+  });
+
+  test('T41: PENGOLAH klik Dokumen → info wewenang', async ({ page }) => {
+    await loginAfterReset(page);
+    await page.goto(`${BASE}/pengolahan?periode_id=1`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#tablePengolahan', { timeout: 15000 });
+    // badge Dokumen read-only tampil (bukan tombol toggle editor)
+    const badge = page.locator('.dok-readonly').first();
+    await expect(badge).toBeVisible();
+    await expect(page.locator('.btn-toggle-dok')).toHaveCount(0);
+    // klik badge → toast info wewenang
+    await badge.click();
+    await expect(page.locator('#ajaxAlertContainer')).toContainText(
+      'Hanya Pengawas Pengolahan, Operator, dan Admin yang dapat mengubah data Dokumen.'
+    );
   });
 
   test('T18: Viewer demo login → dashboard saja', async ({ page }) => {

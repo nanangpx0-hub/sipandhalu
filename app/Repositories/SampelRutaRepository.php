@@ -150,12 +150,30 @@ final class SampelRutaRepository
     public function findRutaById(int $rutaId): ?array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT sr.*, sp.periode_id, sl.nks, sl.nama_sls, d.nama AS nama_desa, k.nama AS nama_kecamatan,
+            'SELECT sr.*, sp.periode_id, p.jenis AS periode_jenis, p.tahun AS periode_tahun, sl.nks, sl.nama_sls, d.nama AS nama_desa, k.nama AS nama_kecamatan,
                     pg.pcl_id, o_pcl.nama AS nama_pcl, o_pcl.no_hp AS hp_pcl,
                     pg.pml_id, o_pml.nama AS nama_pml, o_pml.no_hp AS hp_pml,
-                    pg.pengolah_id, o_peng.nama AS nama_pengolah, o_peng.no_hp AS hp_pengolah
+                    pg.pengolah_id, o_peng.nama AS nama_pengolah, o_peng.no_hp AS hp_pengolah,
+                    CASE 
+                      WHEN p.jenis NOT LIKE "SERUTI_%" THEN 1
+                      WHEN EXISTS (
+                        SELECT 1 FROM sampel_ruta sus_sr
+                        JOIN sampel sus_sp ON sus_sp.id = sus_sr.sampel_id
+                        JOIN periode sus_p ON sus_p.id = sus_sp.periode_id
+                        WHERE sus_sp.sls_id = sp.sls_id
+                          AND sus_sr.no_urut_ruta = sr.no_urut_ruta
+                          AND sus_p.tahun = p.tahun
+                          AND sus_p.jenis LIKE "SUSENAS_%"
+                          AND sus_sr.status_transfer_seruti = 1
+                          AND sus_sr.status_dokumen = "ADA"
+                          AND sus_sr.status_transfer_k = 1
+                          AND sus_sr.status_transfer_kp = 1
+                      ) THEN 1
+                      ELSE 0
+                    END AS is_seruti_aktif
              FROM sampel_ruta sr
              JOIN sampel sp ON sp.id = sr.sampel_id
+             JOIN periode p ON p.id = sp.periode_id
              JOIN sls sl ON sl.id = sp.sls_id
              LEFT JOIN desa d ON d.id = sl.desa_id
              LEFT JOIN kecamatan k ON k.kode = d.kecamatan_kode
@@ -176,13 +194,31 @@ final class SampelRutaRepository
      */
     public function getPengolahanRuta(int $periodeId, array $filters = []): array
     {
-        $sql = 'SELECT sr.*, sp.periode_id, sl.nks, sl.nama_sls, sl.kode_full,
+        $sql = 'SELECT sr.*, sp.periode_id, p.jenis AS periode_jenis, p.tahun AS periode_tahun, sl.nks, sl.nama_sls, sl.kode_full,
                        d.nama AS nama_desa, k.nama AS nama_kecamatan,
                        pg.pcl_id, o_pcl.nama AS nama_pcl, o_pcl.no_hp AS hp_pcl,
                        pg.pml_id, o_pml.nama AS nama_pml, o_pml.no_hp AS hp_pml,
-                       pg.pengolah_id, o_peng.nama AS nama_pengolah, o_peng.no_hp AS hp_pengolah
+                       pg.pengolah_id, o_peng.nama AS nama_pengolah, o_peng.no_hp AS hp_pengolah,
+                       CASE 
+                         WHEN p.jenis NOT LIKE "SERUTI_%" THEN 1
+                         WHEN EXISTS (
+                           SELECT 1 FROM sampel_ruta sus_sr
+                           JOIN sampel sus_sp ON sus_sp.id = sus_sr.sampel_id
+                           JOIN periode sus_p ON sus_p.id = sus_sp.periode_id
+                           WHERE sus_sp.sls_id = sp.sls_id
+                             AND sus_sr.no_urut_ruta = sr.no_urut_ruta
+                             AND sus_p.tahun = p.tahun
+                             AND sus_p.jenis LIKE "SUSENAS_%"
+                             AND sus_sr.status_transfer_seruti = 1
+                             AND sus_sr.status_dokumen = "ADA"
+                             AND sus_sr.status_transfer_k = 1
+                             AND sus_sr.status_transfer_kp = 1
+                         ) THEN 1
+                         ELSE 0
+                       END AS is_seruti_aktif
                 FROM sampel_ruta sr
                 JOIN sampel sp ON sp.id = sr.sampel_id
+                JOIN periode p ON p.id = sp.periode_id
                 JOIN sls sl ON sl.id = sp.sls_id
                 LEFT JOIN desa d ON d.id = sl.desa_id
                 LEFT JOIN kecamatan k ON k.kode = d.kecamatan_kode
@@ -235,9 +271,17 @@ final class SampelRutaRepository
         return $stmt->fetchAll();
     }
 
-    /** Ringkasan progres pengolahan sampel tingkat periode. */
-    public function getPengolahanSummary(int $periodeId): array
+    /** Ringkasan progres pengolahan sampel tingkat periode (mendukung pembatasan per pengolah). */
+    public function getPengolahanSummary(int $periodeId, ?int $pengolahId = null): array
     {
+        $joinPenugasan = '';
+        $params = [':p' => $periodeId];
+
+        if ($pengolahId !== null && $pengolahId > 0) {
+            $joinPenugasan = ' JOIN penugasan pg ON pg.sampel_id = sp.id AND pg.pengolah_id = :pengolah_id ';
+            $params[':pengolah_id'] = $pengolahId;
+        }
+
         $stmt = $this->pdo->prepare(
             "SELECT 
                 COUNT(*) AS total_ruta,
@@ -247,17 +291,35 @@ final class SampelRutaRepository
                 SUM(sr.status_transfer_kp) AS transfer_kp,
                 SUM(sr.status_transfer_seruti) AS transfer_seruti,
                 SUM(CASE WHEN sr.ket_kp_pengolah IS NOT NULL OR sr.ket_m_pengolah IS NOT NULL THEN 1 ELSE 0 END) AS ada_catatan_error,
-                SUM(CASE WHEN sr.status_selesai='SUDAH' THEN 1 ELSE 0 END) AS selesai
+                SUM(CASE WHEN sr.status_selesai='SUDAH' THEN 1 ELSE 0 END) AS selesai,
+                SUM(CASE 
+                  WHEN p.jenis NOT LIKE 'SERUTI_%' THEN 1
+                  WHEN EXISTS (
+                    SELECT 1 FROM sampel_ruta sus_sr
+                    JOIN sampel sus_sp ON sus_sp.id = sus_sr.sampel_id
+                    JOIN periode sus_p ON sus_p.id = sus_sp.periode_id
+                    WHERE sus_sp.sls_id = sp.sls_id
+                      AND sus_sr.no_urut_ruta = sr.no_urut_ruta
+                      AND sus_p.tahun = p.tahun
+                      AND sus_p.jenis LIKE 'SUSENAS_%'
+                      AND sus_sr.status_transfer_seruti = 1
+                      AND sus_sr.status_dokumen = 'ADA'
+                      AND sus_sr.status_transfer_k = 1
+                      AND sus_sr.status_transfer_kp = 1
+                  ) THEN 1
+                  ELSE 0
+                END) AS seruti_aktif
              FROM sampel_ruta sr
              JOIN sampel sp ON sp.id = sr.sampel_id
+             JOIN periode p ON p.id = sp.periode_id
+             {$joinPenugasan}
              WHERE sp.periode_id = :p"
         );
-        $stmt->execute([':p' => $periodeId]);
+        $stmt->execute($params);
         $summary = $stmt->fetch() ?: [];
 
         // Rekap per pengolah
-        $stmtBeban = $this->pdo->prepare(
-            "SELECT o.id AS pengolah_id, o.nama AS pengolah_nama,
+        $bebanSql = "SELECT o.id AS pengolah_id, o.nama AS pengolah_nama,
                     COUNT(DISTINCT sp.id) AS n_sls,
                     COUNT(sr.id) AS total_ruta,
                     SUM(CASE WHEN sr.status_dokumen='ADA' THEN 1 ELSE 0 END) AS dok_ada,
@@ -268,11 +330,16 @@ final class SampelRutaRepository
              JOIN sampel sp ON sp.id = pg.sampel_id
              JOIN orang o ON o.id = pg.pengolah_id
              JOIN sampel_ruta sr ON sr.sampel_id = sp.id
-             WHERE sp.periode_id = :p
-             GROUP BY o.id, o.nama
-             ORDER BY o.nama ASC"
-        );
-        $stmtBeban->execute([':p' => $periodeId]);
+             WHERE sp.periode_id = :p";
+        $bebanParams = [':p' => $periodeId];
+        if ($pengolahId !== null && $pengolahId > 0) {
+            $bebanSql .= ' AND pg.pengolah_id = :own';
+            $bebanParams[':own'] = $pengolahId;
+        }
+        $bebanSql .= ' GROUP BY o.id, o.nama ORDER BY o.nama ASC';
+
+        $stmtBeban = $this->pdo->prepare($bebanSql);
+        $stmtBeban->execute($bebanParams);
         $summary['beban_pengolah'] = $stmtBeban->fetchAll();
 
         return $summary;

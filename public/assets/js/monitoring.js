@@ -715,7 +715,11 @@
     }
     if (f.pengolah_id && Number(f.pengolah_id) > 0) {
       var pengOpt = $('#fPengolah option[value="' + f.pengolah_id + '"]');
-      addTag('Pengolah', 'pengolah_id', pengOpt ? pengOpt.textContent : f.pengolah_id);
+      if (CFG.isPengolahScope) {
+        tags.push('<span class="mon-filter-tag"><i class="fas fa-user-lock mr-1" aria-hidden="true"></i>Pengolah: <b>' + esc(pengOpt ? pengOpt.textContent : f.pengolah_id) + '</b></span>');
+      } else {
+        addTag('Pengolah', 'pengolah_id', pengOpt ? pengOpt.textContent : f.pengolah_id);
+      }
     }
     if (f.pcl_id && Number(f.pcl_id) > 0) {
       var pclOpt = $('#fPcl option[value="' + f.pcl_id + '"]');
@@ -748,6 +752,9 @@
     $$('[data-remove-filter]', els.filterTags).forEach(function (btn) {
       btn.addEventListener('click', function () {
         var key = btn.getAttribute('data-remove-filter');
+        if (CFG.isPengolahScope && key === 'pengolah_id') {
+          return;
+        }
         if (key === 'range') {
           state.filters.range = 'periode';
           state.filters.date_from = '';
@@ -1409,7 +1416,7 @@
     var pclSel = $('#fPcl');
     var pmlSel = $('#fPml');
     if (opts.petugas) {
-      if (pengSel) {
+      if (pengSel && !CFG.isPengolahScope) {
         var pengHtml = '<option value="">Semua pengolah</option>';
         opts.petugas.filter(function (x) { return x.peran === 'PENGOLAH'; }).forEach(function (p) {
           pengHtml += '<option value="' + p.id + '">' + esc(p.nama) + ' (' + p.jml + ')</option>';
@@ -1442,7 +1449,7 @@
       date_to: '',
       kec: '',
       desa_id: '',
-      pengolah_id: '',
+      pengolah_id: (CFG.isPengolahScope && CFG.scopedPengolahId) ? String(CFG.scopedPengolahId) : '',
       pcl_id: '',
       pml_id: '',
       status_dokumen: '',

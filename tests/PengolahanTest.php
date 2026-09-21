@@ -205,19 +205,65 @@ final class PengolahanTest extends TestCase
         $this->assertSame(4, (int) $milikDua[0]['pengolah_id']);
     }
 
-    public function testPengolahReadOnlyTidakBisaUbahRuta(): void
+    public function testPengolahBisaInputErrorKpDanModul(): void
     {
         $this->tambahBinaanPengolahDua();
         $target = $this->rutaRepo->getBySampelId(1)[0];
+        $pengolah = ['id' => 2, 'role_code' => 'PENGOLAH', 'orang_id' => 1];
 
-        // PENGOLAH kini read-only: mutasi apa pun ditolak dengan kode 403.
-        try {
-            $this->svc->updateRuta((int) $target['id'], ['status_transfer_k' => 1], ['id' => 2, 'role_code' => 'PENGOLAH', 'orang_id' => 1]);
-            $this->fail('PENGOLAH seharusnya ditolak mengubah status pengolahan.');
-        } catch (\RuntimeException $e) {
-            $this->assertSame(403, $e->getCode());
-            $this->assertSame(\App\Services\PengolahanService::EDIT_DENIED_MESSAGE, $e->getMessage());
-        }
+        $res = $this->svc->updateRuta((int) $target['id'], [
+            'ket_kp_pengolah' => 'Error R603 ada catatan pengolah',
+            'ket_m_pengolah' => 'Error Modul R407 umur pengolah',
+            'status_transfer_k' => 1,
+        ], $pengolah);
+
+        $this->assertSame('Error R603 ada catatan pengolah', $res['ket_kp_pengolah']);
+        $this->assertSame('Error Modul R407 umur pengolah', $res['ket_m_pengolah']);
+        $this->assertSame(1, (int) $res['status_transfer_k']);
+    }
+
+    public function testPengolahDitolakInputUjiPetikPengawas(): void
+    {
+        $this->tambahBinaanPengolahDua();
+        $target = $this->rutaRepo->getBySampelId(1)[0];
+        $pengolah = ['id' => 2, 'role_code' => 'PENGOLAH', 'orang_id' => 1];
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionCode(403);
+        $this->expectExceptionMessage('Catatan Supervisi / Uji Petik Pengawas Pengolahan hanya bisa dilakukan input oleh role pengawas pengolahan dan admin saja.');
+
+        $this->svc->updateRuta((int) $target['id'], [
+            'uji_petik_pengawas' => 'Catatan uji petik oleh pengolah coba-coba',
+        ], $pengolah);
+    }
+
+    public function testPengolahDitolakUbahRutaOrangLain(): void
+    {
+        $this->tambahBinaanPengolahDua();
+        // Sampel 2 adalah binaan pengolah 4
+        $targetDua = $this->rutaRepo->getBySampelId(2)[0];
+        $pengolahSatu = ['id' => 2, 'role_code' => 'PENGOLAH', 'orang_id' => 1];
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionCode(403);
+        $this->expectExceptionMessage('Akses ditolak: Anda hanya dapat mengubah data kuesioner ruta binaan Anda sendiri.');
+
+        $this->svc->updateRuta((int) $targetDua['id'], [
+            'ket_kp_pengolah' => 'Coba edit punya orang lain',
+        ], $pengolahSatu);
+    }
+
+    public function testPengawasPengolahanBisaInputUjiPetik(): void
+    {
+        $this->tambahBinaanPengolahDua();
+        $target = $this->rutaRepo->getBySampelId(1)[0];
+        $pengawas = ['id' => 12, 'role_code' => 'PENGAWAS_OLAH', 'orang_id' => 11];
+
+        $res = $this->svc->updateRuta((int) $target['id'], [
+            'uji_petik_pengawas' => 'Sampling 10% dokumen valid dan sesuai',
+        ], $pengawas);
+
+        $this->assertSame('Sampling 10% dokumen valid dan sesuai', $res['uji_petik_pengawas']);
     }
 
     public function testPclPmlDanSmSosialReadOnly(): void
@@ -229,7 +275,6 @@ final class PengolahanTest extends TestCase
             ['id' => 11, 'role_code' => 'PML', 'orang_id' => 3],
             ['id' => 5, 'role_code' => 'SM_SOSIAL', 'orang_id' => null],
             ['id' => 6, 'role_code' => 'VIEWER', 'orang_id' => null],
-            ['id' => 12, 'role_code' => 'PENGAWAS_OLAH', 'orang_id' => 11],
         ];
 
         foreach ($readOnly as $user) {
@@ -247,43 +292,50 @@ final class PengolahanTest extends TestCase
         $this->assertNull($after['ket_kp_lapangan']);
     }
 
-    public function testCanEditHanyaAdminOperatorSmPls(): void
+    public function testCanEditGranularRoles(): void
     {
+        // canEditDocument: Tim IPDS & Admin
         foreach (['ADMIN', 'OPERATOR', 'SM_PLS'] as $role) {
-            $this->assertTrue($this->svc->canEdit(['role_code' => $role]), $role . ' harus boleh edit');
+            $this->assertTrue($this->svc->canEditDocument(['role_code' => $role]));
         }
-        foreach (['SM_SOSIAL', 'PML', 'PCL', 'PENGOLAH', 'PENGAWAS_OLAH', 'VIEWER', ''] as $role) {
-            $this->assertFalse($this->svc->canEdit(['role_code' => $role]), '"' . $role . '" tidak boleh edit');
+        foreach (['PENGOLAH', 'PENGAWAS_OLAH', 'SM_SOSIAL', 'PML', 'PCL', 'VIEWER'] as $role) {
+            $this->assertFalse($this->svc->canEditDocument(['role_code' => $role]));
         }
-        // Tanpa role sama sekali → default VIEWER (read-only)
-        $this->assertFalse($this->svc->canEdit([]));
+
+        // canEditPengolahCatatan
+        foreach (['ADMIN', 'OPERATOR', 'SM_PLS', 'PENGOLAH'] as $role) {
+            $this->assertTrue($this->svc->canEditPengolahCatatan(['role_code' => $role]));
+        }
+        foreach (['PENGAWAS_OLAH', 'SM_SOSIAL', 'PML', 'PCL', 'VIEWER'] as $role) {
+            $this->assertFalse($this->svc->canEditPengolahCatatan(['role_code' => $role]));
+        }
+
+        // canEditPengawasCatatan
+        foreach (['ADMIN', 'PENGAWAS_OLAH'] as $role) {
+            $this->assertTrue($this->svc->canEditPengawasCatatan(['role_code' => $role]));
+        }
+        foreach (['OPERATOR', 'SM_PLS', 'PENGOLAH', 'SM_SOSIAL', 'PML', 'PCL', 'VIEWER'] as $role) {
+            $this->assertFalse($this->svc->canEditPengawasCatatan(['role_code' => $role]));
+        }
+
+        // canEdit umum
+        foreach (['ADMIN', 'OPERATOR', 'SM_PLS', 'PENGOLAH', 'PENGAWAS_OLAH'] as $role) {
+            $this->assertTrue($this->svc->canEdit(['role_code' => $role]));
+        }
+        foreach (['SM_SOSIAL', 'PML', 'PCL', 'VIEWER', ''] as $role) {
+            $this->assertFalse($this->svc->canEdit(['role_code' => $role]));
+        }
     }
 
-    public function testNonEditorDitolakBatchTransferDanTerimaDokumen(): void
+    public function testPengolahDitolakTerimaDokumenFisik(): void
     {
         $pengolah = ['id' => 2, 'role_code' => 'PENGOLAH', 'orang_id' => 1];
 
-        try {
-            $this->svc->batchTransfer([
-                'periode_id' => 1, 'nks' => '50536', 'field' => 'status_transfer_k', 'value' => 1,
-            ], $pengolah);
-            $this->fail('batchTransfer seharusnya ditolak untuk PENGOLAH.');
-        } catch (\RuntimeException $e) {
-            $this->assertSame(403, $e->getCode());
-        }
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionCode(403);
+        $this->expectExceptionMessage(\App\Services\PengolahanService::EDIT_DENIED_MESSAGE);
 
-        try {
-            $this->svc->batchTerimaDokumen(['periode_id' => 1, 'nks' => '50536'], $pengolah);
-            $this->fail('batchTerimaDokumen seharusnya ditolak untuk PENGOLAH.');
-        } catch (\RuntimeException $e) {
-            $this->assertSame(403, $e->getCode());
-        }
-
-        // Pastikan tidak ada perubahan status
-        foreach ($this->rutaRepo->getBySampelId(1) as $r) {
-            $this->assertSame('BELUM', $r['status_dokumen']);
-            $this->assertSame(0, (int) $r['status_transfer_k']);
-        }
+        $this->svc->batchTerimaDokumen(['periode_id' => 1, 'nks' => '50536'], $pengolah);
     }
 
     public function testNonEditorDitolakImportLkExcel(): void

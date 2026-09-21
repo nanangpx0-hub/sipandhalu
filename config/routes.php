@@ -9,6 +9,7 @@ use App\Controllers\MonitoringController;
 use App\Controllers\OrangController;
 use App\Controllers\PengolahanController;
 use App\Controllers\PeriodeController;
+use App\Controllers\SerutiController;
 use App\Controllers\SlsController;
 use App\Controllers\UserController;
 use App\Middleware\AuthMiddleware;
@@ -90,6 +91,12 @@ $router->post('/pengolahan/terima-dokumen', PengolahanController::class, 'terima
 $router->post('/pengolahan/batch-transfer', PengolahanController::class, 'batchTransfer', [AuthMiddleware::class, CsrfMiddleware::class]);
 $router->get('/pengolahan/export', PengolahanController::class, 'exportExcel', [AuthMiddleware::class]);
 $router->post('/pengolahan/import', PengolahanController::class, 'importExcel', [AuthMiddleware::class, CsrfMiddleware::class]);
+
+// Modul Khusus Pengolahan Seruti
+$router->get('/seruti', SerutiController::class, 'index', [AuthMiddleware::class]);
+$router->post('/seruti/update-ruta', SerutiController::class, 'updateRuta', [AuthMiddleware::class, CsrfMiddleware::class]);
+$router->post('/seruti/batch-transfer', SerutiController::class, 'batchTransfer', [AuthMiddleware::class, CsrfMiddleware::class]);
+$router->get('/seruti/export', SerutiController::class, 'export', [AuthMiddleware::class]);
 
 // Dashboard Monitoring Operasional (Enterprise) — Tier 1 KPI, Tier 2 chart, Tier 3 grid.
 $router->get('/monitoring', MonitoringController::class, 'index', [AuthMiddleware::class]);

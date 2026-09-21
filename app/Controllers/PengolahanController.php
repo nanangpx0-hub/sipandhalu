@@ -69,9 +69,17 @@ final class PengolahanController
         $periodeId = (int) ($req->get['periode_id'] ?? $req->query('periode_id') ?? 0);
         if ($periodeId <= 0) {
             foreach ($periodes as $p) {
-                if ($p['status'] === 'AKTIF') {
+                if ($p['status'] === 'AKTIF' && str_starts_with((string) $p['jenis'], 'SUSENAS')) {
                     $periodeId = (int) $p['id'];
                     break;
+                }
+            }
+            if ($periodeId <= 0) {
+                foreach ($periodes as $p) {
+                    if ($p['status'] === 'AKTIF') {
+                        $periodeId = (int) $p['id'];
+                        break;
+                    }
                 }
             }
             if ($periodeId <= 0 && $periodes !== []) {
@@ -112,7 +120,7 @@ final class PengolahanController
         }
 
         $rutaList = $this->pengolahanSvc->getDaftarRuta($periodeId, $filters, $user);
-        $summary = $this->pengolahanSvc->getSummary($periodeId);
+        $summary = $this->pengolahanSvc->getSummary($periodeId, $isPengolahScope ? $ownPengolahId : null);
         if ($isPengolahScope && $ownPengolahId > 0) {
             // Tabel beban: hanya baris milik sendiri.
             $summary['beban_pengolah'] = array_values(array_filter(
@@ -135,8 +143,14 @@ final class PengolahanController
             'filters' => $filters,
             'isPengolahScope' => $isPengolahScope,
             'currentUser' => $user,
-            // RBAC: true hanya untuk ADMIN, OPERATOR, SM_PLS (Tim IPDS).
+            // RBAC granular
             'canEdit' => $this->pengolahanSvc->canEdit($user),
+            'canEditDocument' => $this->pengolahanSvc->canEditDocument($user),
+            'canEditPengolah' => $this->pengolahanSvc->canEditPengolahCatatan($user),
+            'canEditPengawas' => $this->pengolahanSvc->canEditPengawasCatatan($user),
+            'canTransfer' => $this->pengolahanSvc->canTransfer($user),
+            'canTransferSeruti' => $this->pengolahanSvc->canTransferSeruti($user),
+            'currentPeriode' => $this->periodeRepo->findById($periodeId),
             'csrf' => \App\Core\Csrf::field(),
             'success' => Session::flash('success'),
             'error' => Session::flash('error'),
@@ -151,6 +165,9 @@ final class PengolahanController
             $this->denyJson();
             return;
         }
+
+        $user['ip'] = $req->ip();
+        $user['user_agent'] = $req->userAgent();
 
         $rutaId = (int) $req->input('ruta_id');
         if ($rutaId <= 0) {
@@ -232,7 +249,7 @@ final class PengolahanController
     public function terimaDokumen(Request $req, array $params = []): void
     {
         $user = $this->currentUser();
-        if (!$this->pengolahanSvc->canEdit($user)) {
+        if (!$this->pengolahanSvc->canEditDocument($user)) {
             $this->denyJson();
             return;
         }

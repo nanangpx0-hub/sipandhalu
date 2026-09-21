@@ -26,6 +26,11 @@ final class PeriodeRepository
         return $r === false ? null : $r;
     }
 
+    public function findById(int $id): ?array
+    {
+        return $this->find($id);
+    }
+
     public function findByTahunJenis(int $tahun, string $jenis): ?array
     {
         $stmt = $this->pdo->prepare('SELECT * FROM periode WHERE tahun=:t AND jenis=:j LIMIT 1');

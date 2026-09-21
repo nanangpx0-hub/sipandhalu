@@ -68,25 +68,42 @@ final class MonitoringController
         $f = $this->svc->normalizeFilters($req->get);
         $f['periode_id'] = $this->svc->resolvePeriodeId((int) $f['periode_id'], $this->periodeRepo->all());
 
+        // PENGOLAH: paksa cakupan pengolah_id ke diri sendiri (URL parameter diabaikan)
+        $user = $this->currentUser();
+        $role = (string) ($user['role_code'] ?? $user['role'] ?? '');
+        $orangId = (int) ($user['orang_id'] ?? 0);
+        if ($role === 'PENGOLAH' && $orangId > 0) {
+            $f['pengolah_id'] = $orangId;
+        }
+
         return $f;
     }
 
     /** GET /monitoring — halaman dashboard (Tier 1-3) server-rendered. */
     public function index(Request $req, array $params = []): void
     {
+        $user = $this->currentUser();
         $filters = $this->filters($req);
         $periode = $filters['periode_id'] > 0 ? $this->periodeRepo->find((int) $filters['periode_id']) : null;
+
+        $role = (string) ($user['role_code'] ?? $user['role'] ?? '');
+        $isPengolahScope = ($role === 'PENGOLAH');
+        $scopedPengolahId = $isPengolahScope ? (int) ($user['orang_id'] ?? 0) : null;
 
         Response::view('monitoring/index.phtml', [
             'title' => 'Monitoring Operasional',
             'periodes' => $this->periodeRepo->all(),
             'filters' => $filters,
             'periode' => $periode,
-            'payload' => $this->svc->buildPayload($filters, $periode, $this->currentUser()),
+            'payload' => $this->svc->buildPayload($filters, $periode, $user),
             'grid' => $this->svc->grid($filters),
-            'options' => $this->svc->options((int) $filters['periode_id']),
-            'canQuick' => $this->svc->canQuickVerify($this->currentUser()),
+            'options' => $this->svc->options((int) $filters['periode_id'], $user),
+            'canQuick' => $this->svc->canQuickVerify($user),
             'csrf' => \App\Core\Csrf::field(),
+            'csrfToken' => \App\Core\Csrf::token(),
+            'monJsVer' => (string) (filemtime(__DIR__ . '/../../public/assets/js/monitoring.js') ?: time()),
+            'isPengolahScope' => $isPengolahScope,
+            'scopedPengolahId' => $scopedPengolahId,
             'success' => Session::flash('success'),
             'error' => Session::flash('error'),
         ]);
@@ -119,7 +136,7 @@ final class MonitoringController
             $periodeId = $this->svc->resolvePeriodeId(0, $this->periodeRepo->all());
         }
 
-        Response::json(['ok' => true, 'options' => $this->svc->options($periodeId)]);
+        Response::json(['ok' => true, 'options' => $this->svc->options($periodeId, $this->currentUser())]);
     }
 
     /** GET /monitoring/detail/{id} — detail + riwayat audit untuk drawer. */

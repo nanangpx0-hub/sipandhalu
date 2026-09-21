@@ -1015,15 +1015,31 @@ final class MonitoringService
 
     /**
      * Opsi filter (cascading) untuk periode terpilih.
+     * Bila user adalah pengolah, saring daftar petugas pengolah agar hanya memuat dirinya.
      *
+     * @param array<string,mixed> $user
      * @return array<string,mixed>
      */
-    public function options(int $periodeId): array
+    public function options(int $periodeId, array $user = []): array
     {
+        $petugas = $this->repo->optionsPetugas($periodeId);
+        $role = (string) ($user['role_code'] ?? $user['role'] ?? '');
+        $orangId = (int) ($user['orang_id'] ?? 0);
+
+        if ($role === 'PENGOLAH' && $orangId > 0) {
+            $petugas = array_values(array_filter($petugas, static function ($p) use ($orangId) {
+                if (($p['peran'] ?? '') === 'PENGOLAH') {
+                    return (int) ($p['id'] ?? 0) === $orangId;
+                }
+
+                return true;
+            }));
+        }
+
         return [
             'kecamatan' => $this->repo->optionsKecamatan($periodeId),
             'desa' => $this->repo->optionsDesa($periodeId),
-            'petugas' => $this->repo->optionsPetugas($periodeId),
+            'petugas' => $petugas,
         ];
     }
 

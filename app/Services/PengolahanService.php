@@ -31,6 +31,7 @@ final class PengolahanService
 
     /** Kode status HTTP untuk penolakan wewenang (dipetakan controller → 403 Forbidden). */
     public const HTTP_FORBIDDEN = 403;
+    public const HTTP_BAD_REQUEST = 400;
 
     public function __construct(
         private PDO $pdo,
@@ -40,17 +41,91 @@ final class PengolahanService
     }
 
     /**
-     * Hak akses tulis modul LK Pengolahan Sampel.
-     * TRUE hanya untuk ADMIN, OPERATOR, dan SM_PLS (Tim IPDS).
-     * Peran lain (SM_SOSIAL, PML, PCL, PENGOLAH, PENGAWAS_OLAH, VIEWER) read-only.
+     * Hak akses tulis status fisik dokumen (Penerimaan dokumen fisik).
+     * ADMIN + OPERATOR + SM_PLS (Subject Matter Tim IPDS).
+     *
+     * @param array<string,mixed> $user
+     */
+    public function canEditDocument(array $user): bool
+    {
+        $role = (string) ($user['role_code'] ?? $user['role'] ?? 'VIEWER');
+
+        return in_array($role, ['ADMIN', 'OPERATOR', 'SM_PLS'], true);
+    }
+
+    /**
+     * Hak akses input temuan error pengolah (ket_kp_pengolah & ket_m_pengolah).
+     * PENGOLAH (binaan sendiri), ADMIN, OPERATOR, SM_PLS.
+     *
+     * @param array<string,mixed> $user
+     */
+    public function canEditPengolahCatatan(array $user): bool
+    {
+        $role = (string) ($user['role_code'] ?? $user['role'] ?? 'VIEWER');
+
+        return in_array($role, ['ADMIN', 'OPERATOR', 'SM_PLS', 'PENGOLAH'], true);
+    }
+
+    /**
+     * Hak akses input catatan uji petik supervisi pengawas pengolahan.
+     * HANYA PENGAWAS_OLAH dan ADMIN.
+     *
+     * @param array<string,mixed> $user
+     */
+    public function canEditPengawasCatatan(array $user): bool
+    {
+        $role = (string) ($user['role_code'] ?? $user['role'] ?? 'VIEWER');
+
+        return in_array($role, ['ADMIN', 'PENGAWAS_OLAH'], true);
+    }
+
+    /**
+     * Hak akses melakukan transfer data pengolahan (Transfer K, KP, Seruti).
+     * Sesuai ketentuan: Petugas Pengolah Data, Pengawas Pengolahan, Operator, dan Admin.
+     * (PENGOLAH dibatasi pada ruta binaan sendiri di tingkat eksekusi).
+     *
+     * @param array<string,mixed> $user
+     */
+    public function canTransfer(array $user): bool
+    {
+        $role = (string) ($user['role_code'] ?? $user['role'] ?? 'VIEWER');
+
+        return in_array($role, ['ADMIN', 'OPERATOR', 'SM_PLS', 'PENGOLAH', 'PENGAWAS_OLAH'], true);
+    }
+
+    /**
+     * Khusus transfer Seruti: hanya Operator (Tim IPDS), Pengawas Pengolahan, dan Admin.
+     * Peran PENGOLAH (Petugas Pengolah Data) TIDAK BISA melakukan transfer Seruti.
+     *
+     * @param array<string,mixed> $user
+     */
+    public function canTransferSeruti(array $user): bool
+    {
+        $role = (string) ($user['role_code'] ?? $user['role'] ?? 'VIEWER');
+
+        return in_array($role, ['ADMIN', 'OPERATOR', 'SM_PLS', 'PENGAWAS_OLAH'], true);
+    }
+
+    /**
+     * Hak akses tulis modul LK Pengolahan Sampel (secara umum).
+     * TRUE untuk ADMIN, OPERATOR, SM_PLS, PENGOLAH, dan PENGAWAS_OLAH.
+     * Peran lain (SM_SOSIAL, PML, PCL, VIEWER) read-only mutlak.
      *
      * @param array<string,mixed> $user
      */
     public function canEdit(array $user): bool
     {
-        $role = (string) ($user['role_code'] ?? $user['role'] ?? 'VIEWER');
+        return $this->canEditDocument($user) 
+            || $this->canEditPengolahCatatan($user) 
+            || $this->canEditPengawasCatatan($user);
+    }
 
-        return in_array($role, self::EDIT_ROLES, true);
+    /** Penegakan mutlak hak tulis status fisik dokumen; melanggar → RuntimeException ber-kode 403. */
+    public function assertCanEditDocument(array $user): void
+    {
+        if (!$this->canEditDocument($user)) {
+            throw new RuntimeException(self::EDIT_DENIED_MESSAGE, self::HTTP_FORBIDDEN);
+        }
     }
 
     /** Penegakan mutlak hak tulis; melanggar → RuntimeException ber-kode 403. */
@@ -85,9 +160,9 @@ final class PengolahanService
     /**
      * Ambil ringkasan progres pengolahan untuk dashboard dan header.
      */
-    public function getSummary(int $periodeId): array
+    public function getSummary(int $periodeId, ?int $pengolahId = null): array
     {
-        return $this->rutaRepo->getPengolahanSummary($periodeId);
+        return $this->rutaRepo->getPengolahanSummary($periodeId, $pengolahId);
     }
 
     /**
@@ -143,7 +218,10 @@ final class PengolahanService
 
     /**
      * Update data pengolahan satu baris ruta (via AJAX / Form) dengan validasi RBAC & audit log.
-     * Read-write hanya untuk peran EDIT_ROLES: ADMIN, OPERATOR, SM_PLS (Tim IPDS).
+     * - PENGOLAH: hanya ruta binaan sendiri, boleh input temuan error KP/Modul & transfer, dilarang input uji petik pengawas.
+     * - PENGAWAS_OLAH: hanya boleh input catatan supervisi/uji petik pengawas pengolahan.
+     * - ADMIN: hak penuh atas semua kolom.
+     * - OPERATOR/SM_PLS (Tim IPDS): penerimaan fisik dokumen, telaah IPDS, error pengolah, transfer, dilarang uji petik pengawas.
      */
     public function updateRuta(int $rutaId, array $data, array $currentUser): array
     {
@@ -152,12 +230,102 @@ final class PengolahanService
             throw new RuntimeException('Data ruta tidak ditemukan.');
         }
 
-        // RBAC mutlak: hanya ADMIN, OPERATOR, dan SM_PLS (Tim IPDS) yang boleh mengubah
-        // data/status pengolahan. Peran lain (SM_SOSIAL, PML, PCL, PENGOLAH,
-        // PENGAWAS_OLAH, VIEWER) read-only — termasuk konfirmasi catatan lapangan.
-        $this->assertCanEdit($currentUser);
-
+        $role = (string) ($currentUser['role_code'] ?? $currentUser['role'] ?? 'VIEWER');
+        $orangId = (int) ($currentUser['orang_id'] ?? 0);
         $userId = (int) ($currentUser['id'] ?? 0);
+
+        // Validasi umum: pengguna harus memiliki salah satu hak akses tulis di modul pengolahan
+        if (!$this->canEdit($currentUser)) {
+            throw new RuntimeException(self::EDIT_DENIED_MESSAGE, self::HTTP_FORBIDDEN);
+        }
+
+        // Validasi Sampel Seruti Aktif: Sampel Seruti hanya aktif dan bisa diolah jika dokumen Susenas sudah selesai diolah dan ditransfer
+        $isSerutiPeriode = str_starts_with((string) ($before['periode_jenis'] ?? ''), 'SERUTI');
+        if ($isSerutiPeriode && empty($before['is_seruti_aktif'])) {
+            throw new RuntimeException('Akses ditolak: Sampel Seruti untuk NKS ini belum aktif. Dokumen Susenas harus selesai diolah dan ditransfer ke Seruti terlebih dahulu.', self::HTTP_FORBIDDEN);
+        }
+
+        // 1. Validasi khusus role PENGOLAH
+        if ($role === 'PENGOLAH') {
+            // Wajib ruta binaannya sendiri
+            if ($orangId <= 0 || (int) ($before['pengolah_id'] ?? 0) !== $orangId) {
+                throw new RuntimeException('Akses ditolak: Anda hanya dapat mengubah data kuesioner ruta binaan Anda sendiri.', self::HTTP_FORBIDDEN);
+            }
+
+            // Catatan supervisi pengawas pengolahan TIDAK BISA diinput/diubah oleh pengolah
+            if (array_key_exists('uji_petik_pengawas', $data)) {
+                $oldUji = trim((string) ($before['uji_petik_pengawas'] ?? ''));
+                $newUji = trim((string) $data['uji_petik_pengawas']);
+                if ($newUji !== $oldUji) {
+                    throw new RuntimeException('Catatan Supervisi / Uji Petik Pengawas Pengolahan hanya bisa dilakukan input oleh role pengawas pengolahan dan admin saja.', self::HTTP_FORBIDDEN);
+                }
+                unset($data['uji_petik_pengawas']);
+            }
+
+            // Pengolah tidak berhak mengubah penerimaan fisik dokumen tim IPDS dan telaah role lain
+            unset(
+                $data['status_dokumen'], $data['tgl_pengiriman'], $data['ttd_sos'], $data['ttd_ipds'],
+                $data['ket_kp_ipds'], $data['ket_m_ipds'], $data['ket_kp_sosial'], $data['ket_m_sosial'],
+                $data['ket_kp_lapangan'], $data['ket_m_lapangan']
+            );
+        }
+
+        // 2. Validasi khusus role PENGAWAS_OLAH
+        elseif ($role === 'PENGAWAS_OLAH') {
+            // Pengawas pengolahan berhak mengisi catatan uji petik supervisi dan melakukan transfer (K, KP, Seruti)
+            $allowedPengawas = ['uji_petik_pengawas', 'status_transfer_k', 'status_transfer_kp', 'status_transfer_seruti'];
+            $data = array_intersect_key($data, array_flip($allowedPengawas));
+            if (empty($data)) {
+                throw new RuntimeException('Pengawas pengolahan hanya berhak mengisi catatan uji petik supervisi atau status transfer.', self::HTTP_FORBIDDEN);
+            }
+        }
+
+        // 3. Validasi khusus role OPERATOR & SM_PLS (Tim IPDS non-admin)
+        elseif (in_array($role, ['OPERATOR', 'SM_PLS'], true)) {
+            // Catatan uji petik pengawas hanya wewenang pengawas pengolahan dan admin
+            if (array_key_exists('uji_petik_pengawas', $data)) {
+                $oldUji = trim((string) ($before['uji_petik_pengawas'] ?? ''));
+                $newUji = trim((string) $data['uji_petik_pengawas']);
+                if ($newUji !== $oldUji) {
+                    throw new RuntimeException('Catatan Supervisi / Uji Petik Pengawas Pengolahan hanya bisa dilakukan input oleh role pengawas pengolahan dan admin saja.', self::HTTP_FORBIDDEN);
+                }
+                unset($data['uji_petik_pengawas']);
+            }
+        }
+
+        // Validasi wewenang khusus Transfer Seruti: Hanya Operator, Pengawas Pengolahan, dan Admin
+        if (array_key_exists('status_transfer_seruti', $data)) {
+            $oldSer = (int) ($before['status_transfer_seruti'] ?? 0);
+            $newSer = (int) $data['status_transfer_seruti'];
+            if ($newSer !== $oldSer) {
+                if (!$this->canTransferSeruti($currentUser)) {
+                    throw new RuntimeException('Akses ditolak: Hanya Operator, Pengawas Pengolahan, dan Admin yang berhak melakukan transfer Seruti.', self::HTTP_FORBIDDEN);
+                }
+            } else {
+                unset($data['status_transfer_seruti']);
+            }
+        }
+
+        // Validasi prasyarat Transfer Seruti pada dokumen Susenas:
+        // Dokumen Susenas harus sudah selesai diolah (Fisik ADA, Transfer K = 1, Transfer KP = 1) sebelum ditransfer ke Seruti
+        if (array_key_exists('status_transfer_seruti', $data) && (int) $data['status_transfer_seruti'] === 1) {
+            $isSusenasPeriode = str_starts_with((string) ($before['periode_jenis'] ?? ''), 'SUSENAS');
+            if ($isSusenasPeriode) {
+                $curDok = $data['status_dokumen'] ?? $before['status_dokumen'];
+                $curK = isset($data['status_transfer_k']) ? (int) $data['status_transfer_k'] : (int) $before['status_transfer_k'];
+                $curKp = isset($data['status_transfer_kp']) ? (int) $data['status_transfer_kp'] : (int) $before['status_transfer_kp'];
+                if ($curDok !== 'ADA' || $curK !== 1 || $curKp !== 1) {
+                    throw new RuntimeException(
+                        'Kuesioner Susenas di NKS ini belum selesai diolah (Dokumen fisik harus ADA, serta Transfer K dan KP harus selesai) sebelum dapat ditransfer ke Seruti.',
+                        self::HTTP_BAD_REQUEST
+                    );
+                }
+            }
+        }
+
+        if (empty($data)) {
+            return $before;
+        }
 
         // Auto-populate metadata penerimaan fisik dokumen ketika status diubah menjadi ADA
         if (isset($data['status_dokumen'])) {
@@ -178,15 +346,9 @@ final class PengolahanService
                             : (!empty($before['nama_pengolah']) ? trim((string)$before['nama_pengolah']) . ' (Tim IPDS)' : 'Tim IPDS'));
                 }
             } elseif ($data['status_dokumen'] === 'BELUM') {
-                if (!isset($data['tgl_pengiriman'])) {
-                    $data['tgl_pengiriman'] = null;
-                }
-                if (!isset($data['ttd_sos'])) {
-                    $data['ttd_sos'] = null;
-                }
-                if (!isset($data['ttd_ipds'])) {
-                    $data['ttd_ipds'] = null;
-                }
+                $data['tgl_pengiriman'] = null;
+                $data['ttd_sos'] = null;
+                $data['ttd_ipds'] = null;
             }
         }
 
@@ -221,8 +383,8 @@ final class PengolahanService
      */
     public function batchTerimaDokumen(array $params, array $currentUser): int
     {
-        // RBAC: penerimaan dokumen fisik = mutasi status → hanya ADMIN/OPERATOR/SM_PLS.
-        $this->assertCanEdit($currentUser);
+        // RBAC: penerimaan dokumen fisik = mutasi status dokumen fisik → hanya ADMIN/OPERATOR/SM_PLS (Tim IPDS).
+        $this->assertCanEditDocument($currentUser);
 
         $periodeId = (int) ($params['periode_id'] ?? 0);
         $nks = trim((string) ($params['nks'] ?? ''));
@@ -316,13 +478,24 @@ final class PengolahanService
      */
     public function batchTransfer(array $params, array $currentUser): int
     {
-        // RBAC: transfer K/KP/Seruti = mutasi status → hanya ADMIN/OPERATOR/SM_PLS.
-        $this->assertCanEdit($currentUser);
+        // RBAC: transfer K/KP/Seruti = mutasi status → ADMIN, OPERATOR, SM_PLS, PENGAWAS_OLAH, atau PENGOLAH (binaan sendiri).
+        $role = (string) ($currentUser['role_code'] ?? $currentUser['role'] ?? 'VIEWER');
+        $orangId = (int) ($currentUser['orang_id'] ?? 0);
+        if (!$this->canTransfer($currentUser)) {
+            throw new RuntimeException(self::EDIT_DENIED_MESSAGE, self::HTTP_FORBIDDEN);
+        }
+        if ($role === 'PENGOLAH' && $orangId <= 0) {
+            throw new RuntimeException(self::EDIT_DENIED_MESSAGE, self::HTTP_FORBIDDEN);
+        }
 
         $field = (string) ($params['field'] ?? '');
         $allowedFields = ['status_transfer_k', 'status_transfer_kp', 'status_transfer_seruti'];
         if (!in_array($field, $allowedFields, true)) {
             throw new RuntimeException('Bidang transfer tidak valid.');
+        }
+
+        if ($field === 'status_transfer_seruti' && !$this->canTransferSeruti($currentUser)) {
+            throw new RuntimeException('Akses ditolak: Hanya Operator, Pengawas Pengolahan, dan Admin yang berhak melakukan transfer Seruti.', self::HTTP_FORBIDDEN);
         }
 
         $val = !empty($params['value']) ? 1 : 0;
@@ -332,20 +505,98 @@ final class PengolahanService
 
         $targetIds = [];
         if (!empty($rutaIds) && is_array($rutaIds)) {
-            $targetIds = array_map('intval', $rutaIds);
+            $rawIds = array_map('intval', $rutaIds);
+            if ($role === 'PENGOLAH' && $orangId > 0 && !empty($rawIds)) {
+                $inPl = implode(',', array_fill(0, count($rawIds), '?'));
+                $stmtCheck = $this->pdo->prepare(
+                    "SELECT sr.id FROM sampel_ruta sr
+                     JOIN sampel sp ON sp.id = sr.sampel_id
+                     JOIN penugasan pg ON pg.sampel_id = sp.id
+                     WHERE sr.id IN ($inPl) AND pg.pengolah_id = ?"
+                );
+                $p = $rawIds;
+                $p[] = $orangId;
+                $stmtCheck->execute($p);
+                $targetIds = $stmtCheck->fetchAll(PDO::FETCH_COLUMN);
+            } else {
+                $targetIds = $rawIds;
+            }
         } elseif ($nks !== '' && $periodeId > 0) {
-            $stmt = $this->pdo->prepare(
-                'SELECT sr.id FROM sampel_ruta sr
+            $sqlNks = 'SELECT sr.id FROM sampel_ruta sr
                  JOIN sampel sp ON sp.id = sr.sampel_id
                  JOIN sls s ON s.id = sp.sls_id
-                 WHERE sp.periode_id = :p AND s.nks = :nks'
-            );
-            $stmt->execute([':p' => $periodeId, ':nks' => $nks]);
+                 LEFT JOIN penugasan pg ON pg.sampel_id = sp.id
+                 WHERE sp.periode_id = :p AND s.nks = :nks';
+            $prmNks = [':p' => $periodeId, ':nks' => $nks];
+            if ($role === 'PENGOLAH' && $orangId > 0) {
+                $sqlNks .= ' AND pg.pengolah_id = :own';
+                $prmNks[':own'] = $orangId;
+            }
+            $stmt = $this->pdo->prepare($sqlNks);
+            $stmt->execute($prmNks);
             $targetIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
         }
 
         if (empty($targetIds)) {
             return 0;
+        }
+
+        // Ambil info periode
+        $stmtP = $this->pdo->prepare('SELECT id, jenis, tahun FROM periode WHERE id = :id LIMIT 1');
+        $stmtP->execute([':id' => $periodeId]);
+        $pInfo = $stmtP->fetch(PDO::FETCH_ASSOC);
+        $pJenis = (string) ($pInfo['jenis'] ?? '');
+        $pTahun = (int) ($pInfo['tahun'] ?? 2026);
+
+        // Jika periode Seruti: hanya ruta yang sudah aktif dari Susenas yang boleh diproses transfer
+        if (str_starts_with($pJenis, 'SERUTI')) {
+            $inPl = implode(',', array_fill(0, count($targetIds), '?'));
+            $stmtAktif = $this->pdo->prepare("
+                SELECT sr.id FROM sampel_ruta sr
+                JOIN sampel sp ON sp.id = sr.sampel_id
+                WHERE sr.id IN ($inPl)
+                  AND EXISTS (
+                    SELECT 1 FROM sampel_ruta sus_sr
+                    JOIN sampel sus_sp ON sus_sp.id = sus_sr.sampel_id
+                    JOIN periode sus_p ON sus_p.id = sus_sp.periode_id
+                    WHERE sus_sp.sls_id = sp.sls_id
+                      AND sus_sr.no_urut_ruta = sr.no_urut_ruta
+                      AND sus_p.tahun = {$pTahun}
+                      AND sus_p.jenis LIKE 'SUSENAS_%'
+                      AND sus_sr.status_transfer_seruti = 1
+                      AND sus_sr.status_dokumen = 'ADA'
+                      AND sus_sr.status_transfer_k = 1
+                      AND sus_sr.status_transfer_kp = 1
+                  )
+            ");
+            $stmtAktif->execute($targetIds);
+            $targetIds = $stmtAktif->fetchAll(PDO::FETCH_COLUMN);
+            if (empty($targetIds)) {
+                throw new RuntimeException(
+                    'Akses ditolak: Sampel Seruti untuk NKS ini belum aktif. Dokumen Susenas harus selesai diolah dan ditransfer ke Seruti terlebih dahulu.',
+                    self::HTTP_FORBIDDEN
+                );
+            }
+        }
+
+        // Jika periode Susenas dan ingin transfer Seruti: hanya ruta yang selesai olah (dokumen ADA, transfer K=1, transfer KP=1) yang boleh ditransfer
+        if (str_starts_with($pJenis, 'SUSENAS') && $field === 'status_transfer_seruti' && $val === 1) {
+            $inPl = implode(',', array_fill(0, count($targetIds), '?'));
+            $stmtOlah = $this->pdo->prepare("
+                SELECT id FROM sampel_ruta
+                WHERE id IN ($inPl)
+                  AND status_dokumen = 'ADA'
+                  AND status_transfer_k = 1
+                  AND status_transfer_kp = 1
+            ");
+            $stmtOlah->execute($targetIds);
+            $targetIds = $stmtOlah->fetchAll(PDO::FETCH_COLUMN);
+            if (empty($targetIds)) {
+                throw new RuntimeException(
+                    'Kuesioner Susenas di NKS ini belum selesai diolah (Dokumen fisik harus ADA, serta Transfer K dan KP harus selesai) sebelum dapat ditransfer ke Seruti.',
+                    self::HTTP_BAD_REQUEST
+                );
+            }
         }
 
         $count = 0;

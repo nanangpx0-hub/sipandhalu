@@ -80,8 +80,15 @@ $monJsVer = (string) (@filemtime(dirname(__DIR__, 2) . '/public/assets/js/monito
         <?php foreach ($options['desa'] ?? [] as $o): ?><option value="<?= (int) $o['id'] ?>" data-kec="<?= View::e((string) ($o['kecamatan_kode'] ?? '')) ?>" <?= ((int) $f('desa_id') === (int) $o['id']) ? 'selected' : '' ?>><?= View::e((string) $o['nama']) ?></option><?php endforeach; ?>
       </select></div>
     <div class="mon-field mon-span-2"><label for="fPengolah">Pengolah</label>
-      <select id="fPengolah" class="form-control" data-filter="pengolah_id" aria-label="Filter pengolah"><option value="">Semua pengolah</option>
-        <?php foreach (array_filter($options['petugas'] ?? [], static fn ($x) => ($x['peran'] ?? '') === 'PENGOLAH') as $o): ?><option value="<?= (int) $o['id'] ?>" <?= ((int) $f('pengolah_id') === (int) $o['id']) ? 'selected' : '' ?>><?= View::e((string) $o['nama']) ?> (<?= (int) $o['jml'] ?>)</option><?php endforeach; ?>
+      <select id="fPengolah" class="form-control" data-filter="pengolah_id" aria-label="Filter pengolah"<?= !empty($isPengolahScope) ? ' disabled data-scoped="1"' : '' ?>>
+        <?php if (!empty($isPengolahScope)): ?>
+          <?php foreach (array_filter($options['petugas'] ?? [], static fn ($x) => ($x['peran'] ?? '') === 'PENGOLAH' && (int) $x['id'] === (int) $scopedPengolahId) as $o): ?>
+            <option value="<?= (int) $o['id'] ?>" selected><?= View::e((string) $o['nama']) ?> (<?= (int) $o['jml'] ?>)</option>
+          <?php endforeach; ?>
+        <?php else: ?>
+          <option value="">Semua pengolah</option>
+          <?php foreach (array_filter($options['petugas'] ?? [], static fn ($x) => ($x['peran'] ?? '') === 'PENGOLAH') as $o): ?><option value="<?= (int) $o['id'] ?>" <?= ((int) $f('pengolah_id') === (int) $o['id']) ? 'selected' : '' ?>><?= View::e((string) $o['nama']) ?> (<?= (int) $o['jml'] ?>)</option><?php endforeach; ?>
+        <?php endif; ?>
       </select></div>
 
 
@@ -118,7 +125,7 @@ $monJsVer = (string) (@filemtime(dirname(__DIR__, 2) . '/public/assets/js/monito
   <div class="mon-section__head"><h2 class="mon-section__title"><i class="fas fa-chart-simple mr-1" aria-hidden="true"></i>Tier 1 — Ringkasan Eksekutif</h2><span class="mon-muted" id="monMeta"></span></div>
   <div class="mon-kpi-grid" id="monKpiGrid" role="region" aria-label="Kartu indikator kinerja utama">
     <?php foreach ($kpi as $c): ?>
-    <div class="mon-kpi mon-kpi--<?= View::e($c['tone'] ?? 'neutral') ?>" tabindex="0" role="group" aria-label="<?= View::e($c['aria'] ?? '') ?>">
+    <div class="mon-kpi mon-kpi--<?= View::e($c['tone'] ?? 'neutral') ?>" data-kpi="<?= View::e($c['id'] ?? '') ?>" tabindex="0" role="group" aria-label="<?= View::e($c['aria'] ?? '') ?>">
       <div class="mon-kpi__top"><span class="mon-kpi__label"><?= View::e($c['label']) ?></span><i class="fas <?= View::e($c['icon']) ?> mon-kpi__icon" aria-hidden="true"></i></div>
       <div class="mon-kpi__value"><?= View::e($c['value_display']) ?><small><?= View::e($c['unit']) ?></small></div>
       <div class="mon-kpi__row"><span class="mon-kpi__pct"><?= View::e($c['pct_display']) ?></span><span class="mon-kpi__delta">&Delta; <?= View::e($c['delta_display']) ?></span></div>
@@ -225,6 +232,8 @@ window.MON_CONFIG = {
   bulkUrl: '/monitoring/bulk-verify',
   csrfToken: <?= json_encode($csrfToken, JSON_UNESCAPED_SLASHES) ?>,
   canQuick: <?= $canQuick ? 'true' : 'false' ?>,
+  isPengolahScope: <?= !empty($isPengolahScope) ? 'true' : 'false' ?>,
+  scopedPengolahId: <?= !empty($scopedPengolahId) ? (int) $scopedPengolahId : 'null' ?>,
   initialFilters: <?= json_encode($filters, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
   initialPayload: <?= json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
   initialGrid: <?= json_encode($grid, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
